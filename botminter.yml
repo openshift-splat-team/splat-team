@@ -3,23 +3,6 @@ display_name: Scrum Compact Solo Team
 description: Lightweight single-member team with GitHub-based human review. One agent wears all hats. Human approves/rejects via GitHub issue comments.
 version: '1.0.0'
 schema_version: '1.0'
-coding_agents:
-  claude-code:
-    name: claude-code
-    display_name: Claude Code
-    context_file: CLAUDE.md
-    agent_dir: '.claude'
-    binary: claude
-default_coding_agent: claude-code
-bridges:
-- name: tuwunel
-  display_name: Matrix (Tuwunel)
-  description: Matrix bridge via Tuwunel homeserver (local Podman container)
-  type: local
-- name: telegram
-  display_name: Telegram
-  description: Telegram Bot API for team communication
-  type: external
 roles:
 - name: superman
   description: All-in-one member — PO, architect, dev, QE, SRE, content writer
@@ -95,6 +78,9 @@ statuses:
   description: Task completed by team manager
 - name: error
   description: Issue failed processing 3 times
+projects:
+- name: vcf-migration-operator
+  fork_url: https://github.com/openshift/vcf-migration-operator
 views:
 - name: PO
   prefixes:
@@ -139,6 +125,23 @@ views:
   also_include:
   - done
   - error
+coding_agents:
+  claude-code:
+    name: claude-code
+    display_name: Claude Code
+    context_file: CLAUDE.md
+    agent_dir: '.claude'
+    binary: claude
+default_coding_agent: claude-code
+bridges:
+- name: tuwunel
+  display_name: Matrix (Tuwunel)
+  description: Matrix bridge via Tuwunel homeserver (local Podman container)
+  type: local
+- name: telegram
+  display_name: Telegram
+  description: Telegram Bot API for team communication
+  type: external
 bridge: tuwunel
 operator:
   bridge_username: bmadmin
