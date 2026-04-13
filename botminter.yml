@@ -87,6 +87,8 @@ projects:
   fork_url: https://github.com/openshift/machine-api-operator
 - name: cluster-cloud-controller-manager-operator
   fork_url: https://github.com/openshift/cluster-cloud-controller-manager-operator
+- name: cloud-credential-operator
+  fork_url: https://github.com/openshift/cloud-credential-operator
 views:
 - name: PO
   prefixes:
