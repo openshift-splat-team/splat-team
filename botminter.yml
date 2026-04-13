@@ -89,6 +89,8 @@ projects:
   fork_url: https://github.com/openshift/cluster-cloud-controller-manager-operator
 - name: cloud-credential-operator
   fork_url: https://github.com/openshift/cloud-credential-operator
+- name: cluster-storage-operator
+  fork_url: https://github.com/openshift/cluster-storage-operator
 views:
 - name: PO
   prefixes:
