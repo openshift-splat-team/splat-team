@@ -83,6 +83,8 @@ projects:
   fork_url: https://github.com/openshift/vcf-migration-operator
 - name: installer
   fork_url: https://github.com/openshift/installer
+- name: machine-api-operator
+  fork_url: https://github.com/openshift/machine-api-operator
 views:
 - name: PO
   prefixes:
