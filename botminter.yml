@@ -81,6 +81,8 @@ statuses:
 projects:
 - name: vcf-migration-operator
   fork_url: https://github.com/openshift/vcf-migration-operator
+- name: installer
+  fork_url: https://github.com/openshift/installer
 views:
 - name: PO
   prefixes:
