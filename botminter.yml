@@ -85,6 +85,8 @@ projects:
   fork_url: https://github.com/openshift/installer
 - name: machine-api-operator
   fork_url: https://github.com/openshift/machine-api-operator
+- name: cluster-cloud-controller-manager-operator
+  fork_url: https://github.com/openshift/cluster-cloud-controller-manager-operator
 views:
 - name: PO
   prefixes:
