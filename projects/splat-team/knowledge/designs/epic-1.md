@@ -1,10 +1,11 @@
 # Design: vSphere Multi-Account Credential Management (Component-Specific)
 
-**Epic:** #10 - feat: vSphere Multi-Account Credential Management  
+**Epic:** openshift-splat-team/splat-team#1 - feat: vSphere Multi-Account Credential Management  
 **Status:** Revision 1 - Addresses PO Feedback  
 **Author:** architect (superman)  
 **Date:** 2026-04-13  
-**Revision:** Incorporated component-specific credential requirements
+**Revision:** Incorporated component-specific credential requirements  
+**Note:** Migrated from openshift-splat-team/vcf-ocp-migration#10
 
 ## Overview
 
@@ -1086,7 +1087,7 @@ None at this time. All requirements from the epic and PO feedback are addressed 
 
 ## References
 
-- Epic #10: feat: vSphere Multi-Account Credential Management
+- Epic: [openshift-splat-team/splat-team#1](https://github.com/openshift-splat-team/splat-team/issues/1) - feat: vSphere Multi-Account Credential Management (migrated from vcf-ocp-migration#10)
 - PO Feedback (2026-04-13): "The design should allow specific credentials to be assigned to specific components. These components are compute/machine API, storage, cloud controller manager."
 - Enhancement Proposal: [vSphere Multi-Account Credentials](https://github.com/rvanderp3/enhancements/blob/9e5c28ffd653e2b75f95ab58f76bb6edddcd5247/enhancements/installer/vsphere-multi-account-credentials-enhancement.md)
 - vSphere Documentation: [Installing OpenShift on vSphere](https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html-single/installing_on_vmware_vsphere/index)
