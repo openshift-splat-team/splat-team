@@ -80,17 +80,17 @@ statuses:
   description: Issue failed processing 3 times
 projects:
 - name: vcf-migration-operator
-  fork_url: https://github.com/openshift/vcf-migration-operator
+  fork_url: https://github.com/openshift-splat-team/vcf-migration-operator
 - name: installer
-  fork_url: https://github.com/openshift/installer
+  fork_url: https://github.com/openshift-splat-team/installer
 - name: machine-api-operator
-  fork_url: https://github.com/openshift/machine-api-operator
+  fork_url: https://github.com/openshift-splat-team/machine-api-operator
 - name: cluster-cloud-controller-manager-operator
-  fork_url: https://github.com/openshift/cluster-cloud-controller-manager-operator
+  fork_url: https://github.com/openshift-splat-team/cluster-cloud-controller-manager-operator
 - name: cloud-credential-operator
-  fork_url: https://github.com/openshift/cloud-credential-operator
+  fork_url: https://github.com/openshift-splat-team/cloud-credential-operator
 - name: cluster-storage-operator
-  fork_url: https://github.com/openshift/cluster-storage-operator
+  fork_url: https://github.com/openshift-splat-team/cluster-storage-operator
 views:
 - name: PO
   prefixes:
