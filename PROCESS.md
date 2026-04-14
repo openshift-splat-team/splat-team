@@ -241,6 +241,66 @@ Issues are assigned to milestones via `gh issue edit --milestone "<title>"`. The
 
 ---
 
+## Branch Conventions
+
+The team repo uses epic-specific branches to isolate changes and enable multi-agent collaboration.
+
+### Branch Naming
+
+| Branch Type | Pattern | Description |
+|------------|---------|-------------|
+| Main | `main` | Stable team configuration |
+| Epic branch | `epic/<epic-number>-<slug>` | All changes for a specific epic |
+| Process change | `process/<slug>` | Team process improvements |
+
+Examples:
+- `epic/42-api-versioning` — branch for epic #42
+- `process/update-design-template` — process improvement branch
+
+### Epic Branch Workflow
+
+1. **Branch creation** — When an epic transitions to `arch:design`, create a new branch:
+   ```bash
+   cd team/
+   git checkout -b epic/<number>-<slug>
+   ```
+
+2. **Stage changes** — All team repo changes related to the epic are committed to this branch:
+   - Design documents (`projects/<project>/knowledge/designs/`)
+   - New knowledge files
+   - Invariant updates
+   - Story breakdown plans
+
+3. **Pull on each scan** — Agent pulls the epic branch before each board scan to get latest changes:
+   ```bash
+   cd team/
+   git pull origin epic/<number>-<slug>
+   ```
+
+4. **PR on completion** — When the epic reaches `po:accept`, create a PR from the epic branch to `main`:
+   ```bash
+   gh pr create --base main --head epic/<number>-<slug>
+   ```
+
+5. **Merge and cleanup** — After human acceptance, merge the PR and delete the epic branch
+
+### Benefits
+
+- **Isolation** — Multiple agents can work on different epics without conflicts
+- **Change boundaries** — Clear association between epic and its team repo changes
+- **Review granularity** — Human reviews only the changes relevant to one epic
+- **Rollback** — Easy to abandon an epic by deleting its branch
+
+### Multi-Agent Coordination
+
+When multiple agents work on the same team repo:
+- Each agent works on a different epic branch
+- Agents pull their epic branch before each scan cycle
+- Changes to `main` (via merged PRs) propagate when agents rebase their epic branches
+- No coordination needed — git handles merge conflicts
+
+---
+
 ## Pull Request Format
 
 Pull requests are real GitHub PRs on the team repo. PRs are used for team evolution (knowledge, invariants, process changes), NOT for code changes.
@@ -249,11 +309,11 @@ Pull requests are real GitHub PRs on the team repo. PRs are used for team evolut
 
 | Field | GitHub Mapping | Description |
 |-------|---------------|-------------|
-| `title` | PR title | Descriptive title of the change |
+| `title` | PR title | Descriptive title of the change (e.g., `Epic #42: API Versioning`) |
 | `state` | PR state | `open`, `merged`, or `closed` |
-| `base` | Base branch | Target branch (usually `main`) |
-| `head` | Head branch | Feature branch |
-| `labels` | PR labels | e.g., `kind/process-change` |
+| `base` | Base branch | Target branch (always `main` for epic PRs) |
+| `head` | Head branch | Epic branch (`epic/<number>-<slug>`) or process branch |
+| `labels` | PR labels | e.g., `kind/epic`, `kind/process-change` |
 | `body` | PR body | Description of the change (markdown) |
 
 ### Reviews

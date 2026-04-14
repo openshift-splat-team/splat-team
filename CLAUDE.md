@@ -16,7 +16,7 @@ The member runs in a **project repo clone** with the team repo cloned into `team
 
 ```
 project-repo-superman/               # Project repo clone (agent CWD)
-  team/                           # Team repo clone
+  team/                           # Team repo clone (on epic branch)
     knowledge/, invariants/             # Team-level
     members/superman/                    # Member config
     projects/<project>/                 # Project-specific
@@ -26,7 +26,28 @@ project-repo-superman/               # Project repo clone (agent CWD)
   poll-log.txt                          # Board scan audit log
 ```
 
-Pulling `team/` updates all team configuration. Copies (ralph.yml, settings.local.json) require `just sync`.
+### Branch Tracking
+
+The `team/` directory tracks an **epic-specific branch** (e.g., `epic/42-api-versioning`), NOT `main`. This isolates changes per epic and enables multi-agent collaboration.
+
+**Workflow:**
+1. When starting an epic, checkout its branch in `team/`:
+   ```bash
+   cd team/
+   git checkout epic/<number>-<slug>
+   ```
+
+2. Before each board scan, pull the epic branch:
+   ```bash
+   cd team/
+   git pull origin epic/<number>-<slug>
+   ```
+
+3. Stage all team repo changes (designs, knowledge, invariants) to the epic branch
+
+4. When the epic completes, create a PR from the epic branch to `main`
+
+Pulling `team/` updates all team configuration from the epic branch. Copies (ralph.yml, settings.local.json) require `just sync`.
 
 ## Coordination Model
 
@@ -86,11 +107,17 @@ Skills, sub-agents, and settings are scoped across multiple levels using a `codi
 
 | What changes | How it reaches the agent |
 |---|---|
-| Knowledge, invariants, PROCESS.md, team context.md | Auto — agent pulls `team/` every scan, reads directly |
+| Knowledge, invariants, PROCESS.md, team context.md | Auto — agent pulls epic branch of `team/` every scan, reads directly |
 | Member PROMPT.md, context.md | Auto — workspace files are symlinks into `team/` |
 | Skills, agents (all levels) | Auto — read via `team/` paths (skills.dirs) or symlinks (.claude/agents/) |
 | ralph.yml | **Manual** — requires `just sync` + agent restart |
 | settings.local.json | **Manual** — requires `just sync` (re-copy) |
+
+**Epic branch isolation:**
+- Changes are staged on the epic branch (`epic/<number>-<slug>`)
+- Agent pulls the epic branch before each scan
+- Changes merge to `main` via PR when epic completes
+- Multiple agents on different epics = no conflicts
 
 ## Team Repo Access Paths
 
