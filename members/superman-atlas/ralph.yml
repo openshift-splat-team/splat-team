@@ -298,7 +298,7 @@ hats:
          concerns and address them in the revised design.
       3. If needed, read the project codebase from `./` (agent CWD is the project repo).
       4. Consult relevant knowledge from the paths above as needed for the design.
-      5. Produce the design doc at `team/projects/<project>/knowledge/designs/epic-<number>.md`.
+      5. Produce the design doc at `projects/<project>/knowledge/designs/epic-<number>.md`.
          If revising after rejection, overwrite the previous design doc.
          The design must include:
          - Overview
@@ -365,7 +365,7 @@ hats:
 
       1. Read the epic issue via `gh issue view <number> --repo "$TEAM_REPO" --json number,title,body,labels,state,comments`.
       2. Find the linked design doc — the designer hat appends a comment with the path,
-         typically `team/projects/<project>/knowledge/designs/epic-<number>.md`.
+         typically `projects/<project>/knowledge/designs/epic-<number>.md`.
          Read the design doc.
       3. **Check for rejection feedback:** Scan the epic's comments for feedback from
          `👑 lead` or `📝 po` indicating a plan rejection.
