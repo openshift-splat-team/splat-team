@@ -104,6 +104,142 @@ Work is tracked through GitHub issues on this repo:
 
 See [`PROCESS.md`](PROCESS.md) for complete status definitions, branch conventions, and comment formats.
 
+### Detailed Workflow
+
+#### Epic Lifecycle
+
+**1. Triage & Backlog (`po:triage` → `po:backlog`)**
+- PO evaluates new epic requests
+- Prioritizes and adds to backlog
+- Human decision: activate for design or keep in backlog
+
+**2. Design Phase (`po:backlog` → `arch:design` → `lead:design-review` → `po:design-review`)**
+- Agent creates epic branch: `git checkout -b epic/<number>-<slug>`
+- Architect produces design document in `projects/<project>/knowledge/designs/epic-<number>.md`
+- Design includes: problem statement, approach, architecture, dependencies
+- Lead reviews (optional gate)
+- **Human review gate**: Approve or reject with feedback
+- If rejected: loops back to `arch:design` with feedback
+
+**3. Planning Phase (`po:design-review` → `arch:plan` → `lead:plan-review` → `po:plan-review`)**
+- Architect breaks epic into story-sized work items
+- Creates story breakdown plan with acceptance criteria
+- Lead reviews (optional gate)
+- **Human review gate**: Approve or reject with feedback
+- If rejected: loops back to `arch:plan` with feedback
+
+**4. Story Creation (`po:plan-review` → `arch:breakdown` → `po:ready`)**
+- Architect creates GitHub issues for each story
+- Links stories to parent epic with `parent/<epic-number>` label
+- Epic moves to `po:ready` (ready backlog)
+- **Human decision**: When to activate epic
+
+**5. Implementation (`po:ready` → `arch:in-progress`)**
+- Stories flow through TDD cycle in parallel:
+  - `qe:test-design` — QE writes test stubs and test plan
+  - `dev:implement` — Developer implements feature
+  - `dev:code-review` — Internal code review
+  - `qe:verify` — QE verifies against acceptance criteria
+  - `arch:sign-off` → `po:merge` → `done` (auto-advances)
+- Architect monitors progress, epic stays in `arch:in-progress`
+- When all stories complete, epic moves to `po:accept`
+
+**6. Acceptance (`arch:in-progress` → `po:accept`)**
+- **Human review gate**: Final acceptance review
+- Verify all stories completed
+- Approve or reject with feedback
+- If rejected: loops back to `arch:in-progress` with issues to address
+
+**7. Team Repo PR (`po:accept` → `done`)**
+- Create PR from epic branch to `main`
+- PR includes all design docs, knowledge, invariants added during epic
+- Human reviews and merges PR
+- Epic branch deleted after merge
+
+#### Story Lifecycle
+
+Stories follow a Test-Driven Development flow:
+
+```
+qe:test-design → dev:implement → dev:code-review → qe:verify → done
+       ↑              ↓               ↓
+       └──────────────┴───────────────┘
+              (rejection loops)
+```
+
+**Rejection loops:**
+- Code review can reject back to `dev:implement`
+- QE verification can reject back to `dev:implement`
+- Agent fixes issues and cycles through review again
+
+### Updating Designs Mid-Implementation
+
+**Problem:** You've approved a design, stories are in progress, but you realize the design needs changes.
+
+**Options:**
+
+#### Option 1: Reject at `po:accept` Gate (Minor Changes)
+Wait until the epic reaches final acceptance, then reject:
+
+```markdown
+### 📝 human — 2026-04-16T12:00:00Z
+
+**REJECT**
+
+Implementation revealed design issues:
+- [specific problem]
+- Needs redesign to address [X]
+```
+
+This sends the epic back to `arch:in-progress`, but stories may need rework.
+
+#### Option 2: Direct Design Update (Recommended for Most Cases)
+
+Since design docs live on the epic branch, you can update them anytime:
+
+1. **Edit the design directly** on the epic branch:
+   ```bash
+   cd team/
+   git checkout epic/<number>-<slug>
+   vim projects/<project>/knowledge/designs/epic-<number>.md
+   git add projects/<project>/knowledge/designs/
+   git commit -m "Design revision: address implementation findings"
+   git push
+   ```
+
+2. **Comment on the epic** to notify the agent:
+   ```markdown
+   ### 📝 human — 2026-04-16T12:00:00Z
+   
+   **Design updated** based on implementation findings.
+   
+   Key changes:
+   - [what changed and why]
+   - Stories affected: #X, #Y
+   ```
+
+3. **Agent pulls the updated design** on next scan cycle and adjusts implementation
+
+**Advantages:**
+- Preserves git history of design evolution
+- Agent sees changes immediately
+- No workflow disruption
+
+#### Option 3: Create Follow-up Epic (Major Redesigns)
+
+For fundamental design pivots:
+
+1. Create new epic with revised design
+2. Close or park current epic with explanation
+3. New epic goes through full design → plan → implement cycle
+
+**When to use:**
+- Design assumptions were fundamentally wrong
+- Current implementation needs to be abandoned
+- Scope grew significantly beyond original epic
+
+**Workflow limitation:** The formal workflow lacks a path from `arch:in-progress` back to `arch:design`. The assumption is that design issues are caught at review gates. For mid-implementation changes, use direct git edits (Option 2) or a new epic (Option 3).
+
 ## Multi-Agent Collaboration
 
 While the compact profile uses a single agent, the branching strategy supports multiple agents working on the same team repo:
