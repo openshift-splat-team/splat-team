@@ -1,0 +1,15 @@
+# Credentials and secrets
+systemd/botminter.env
+*.env
+*.key
+*.pem
+*.token
+
+# Workspace state
+poll-log.txt
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~

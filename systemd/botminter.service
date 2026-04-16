@@ -1,0 +1,38 @@
+[Unit]
+Description=Botminter Agent Orchestration Service
+Documentation=https://github.com/openshift-splat-team/splat-team
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=splat
+Group=splat
+WorkingDirectory=/home/splat
+Environment="HOME=/home/splat"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/home/splat/.local/bin:/home/splat/.cargo/bin"
+
+# Load credentials from environment file
+EnvironmentFile=/home/splat/.botminter/workspaces/splat/team/systemd/botminter.env
+
+# Start botminter with git sync
+ExecStart=/usr/local/bin/botminter-start
+
+# Stop botminter gracefully
+ExecStop=/home/splat/.cargo/bin/bm daemon stop
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=botminter
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
