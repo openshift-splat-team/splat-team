@@ -14,6 +14,41 @@ The compact team profile uses a single agent (`superman`) who wears all hats—P
 - **File-based coordination**: Knowledge, invariants, and process conventions propagate via git
 - **Project-aware**: Team repo structure supports multiple projects with shared and project-specific knowledge
 
+## Terminology Note: "Epic" vs Jira Epic
+
+**Important:** Botminter uses the term "epic" differently than Jira.
+
+| Aspect | Jira Epic | Botminter Epic |
+|--------|-----------|----------------|
+| **Purpose** | Organizational grouping for related stories | Structured development lifecycle for a feature/initiative |
+| **Workflow** | Passive container, no required phases | Mandatory 12+ phase lifecycle with gates |
+| **Design** | Optional, informal | **Required**: Formal design doc with human approval |
+| **Planning** | Optional, flexible | **Required**: Story breakdown with human approval |
+| **Git integration** | None | **Dedicated epic branch** for all team repo changes |
+| **Artifacts** | None required | Design docs, knowledge files, invariants on epic branch |
+| **Review gates** | None | **Three human gates**: design, plan, final acceptance |
+| **Completion** | Close when stories done | **Team repo PR** merges epic branch to main |
+| **Comparable to** | Simple grouping mechanism | Feature initiative, mini-project, or formal development cycle |
+
+**In practice:**
+
+- **Jira epic** ≈ Loose collection of related work items
+- **Botminter epic** ≈ Complete feature development cycle (architecture → design → planning → implementation → acceptance)
+
+A botminter epic is more heavyweight and structured. It's closer to what some organizations call a "feature," "initiative," or "theme" - work that requires upfront design, formal planning, and structured delivery.
+
+**When to use a botminter epic:**
+- Features requiring design decisions and architectural planning
+- Work spanning multiple stories with dependencies
+- Changes that affect team knowledge, invariants, or process
+- Initiatives requiring human approval at key milestones
+
+**When to use a simple story:**
+- Small, well-defined tasks
+- Bug fixes with clear scope
+- Documentation updates
+- Routine maintenance work
+
 ## Repository Structure
 
 ```
