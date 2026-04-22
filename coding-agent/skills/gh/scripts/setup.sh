@@ -27,8 +27,17 @@ fi
 # Resolve project IDs (cache for session)
 OWNER=$(echo "$TEAM_REPO" | cut -d/ -f1)
 
-# Get project number with error checking
-PROJECT_NUM=$(gh project list --owner "$OWNER" --format json 2>&1 | jq -r '.projects[0].number')
+# Get project number from BotMinter config if available
+CONFIG_FILE="$HOME/.botminter/config.yml"
+if [ -f "$CONFIG_FILE" ]; then
+  PROJECT_NUM=$(awk '/project_number:/ {print $2}' "$CONFIG_FILE" | head -1)
+fi
+
+# Fallback: get first project if not in config
+if [ -z "$PROJECT_NUM" ] || [ "$PROJECT_NUM" = "null" ]; then
+  PROJECT_NUM=$(gh project list --owner "$OWNER" --format json 2>&1 | jq -r '.projects[0].number')
+fi
+
 if [ -z "$PROJECT_NUM" ] || [ "$PROJECT_NUM" = "null" ]; then
   echo "❌ ERROR: No GitHub Project found for organization: $OWNER"
   exit 1
