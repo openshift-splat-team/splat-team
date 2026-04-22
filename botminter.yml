@@ -97,6 +97,8 @@ projects:
   fork_url: https://github.com/openshift-splat-team/govmomi
 - name: provider-certification-plugins
   fork_url: https://github.com/openshift-splat-team/provider-certification-plugins
+- name: opct
+  fork_url: https://github.com/openshift-splat-team/opct
 views:
 - name: PO
   prefixes:
