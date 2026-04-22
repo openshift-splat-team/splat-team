@@ -76,7 +76,7 @@ This shared credential model creates critical security and compliance issues:
 1. **Automatic credential minting**: CCO will NOT automatically create vCenter accounts (requires excessive CCO privileges and conflicts with enterprise IAM workflows)
 2. **Dynamic privilege adjustment**: Privilege requirements are fixed per component (not runtime-configurable)
 3. **Credential lifecycle management**: External credential rotation tooling is out of scope (administrators use existing vCenter IAM tools)
-4. **Legacy vSphere version support**: Only vSphere 7.0+ supported (older versions lack required RBAC granularity)
+4. **Legacy vSphere version support**: Only vSphere 8.0+ supported (older versions lack required RBAC granularity)
 
 ## Proposal
 
@@ -503,7 +503,7 @@ func (r *ReconcileCredentialsRequest) validateVSphereCredentials(cr *minterv1.Cr
 1. Installer completes infrastructure provisioning using installer credentials
 2. Installer creates all component credential secrets in kube-system namespace
 3. Installer does NOT modify the Infrastructure CR `credentialsMode` field
-4. CCO detects presence of component-specific credential secrets and provisions them based on the component request
+4. CCO detects presence of component-specific credential secrets in kube-system and provisions them to operator namespaces. The CCO matches credential secrets to component requests using annotations in the CredentialsRequest objects (e.g., `cloudcredential.openshift.io/mode: passthrough`) that map to the component-specific secret names
 5. Operators restart and begin using component-specific credentials from their respective namespaces
 6. Installer credentials remain persisted in vsphere-cloud-credentials for now (may be removed in future enhancement)
 
@@ -640,7 +640,7 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 **Approach**: Use vSphere certificate authentication instead of username/password.
 
 **Why not implemented now**:
-- Requires vSphere 7.0 U2+ (later than target)
+- Requires vSphere 8.0 U2+ (later than target)
 - Certificate lifecycle management complexity (issuance, renewal, revocation)
 - Not all vSphere environments support certificate authentication
 - Can be added as alternative auth method in future (complementary, not replacement)
@@ -658,8 +658,8 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
    - **Resolution needed**: Define restart behavior and document rotation procedure
 
 3. **Should the enhancement support vSphere 6.7?**
-   - **Current decision**: vSphere 7.0+ only (better RBAC granularity)
-   - **Question**: Customer demand for 6.7 support?
+   - **Current decision**: vSphere 8.0+ only (better RBAC granularity)
+   - **Question**: Customer demand for 6.7 or 7.x support?
    - **Future consideration**: Backport if significant demand, with privilege validation caveats
 
 4. **Should diagnostics component have separate credentials?**
@@ -754,9 +754,9 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 
 ### vSphere Version Testing
 
-- vSphere 7.0 U3
-- vSphere 8.0 U1
-- ESXi 7.0 and 8.0
+- vSphere 8.0 U1 and later
+- vSphere 8.0 U2
+- ESXi 8.0 and later
 
 ## Graduation Criteria
 
@@ -778,7 +778,7 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 - ✅ Migration path tested and documented for existing clusters
 - ✅ Credential rotation tested and documented
 - ✅ Multi-vCenter scenarios tested
-- ✅ vSphere 7.0+ compatibility validated
+- ✅ vSphere 8.0+ compatibility validated
 - ✅ Privilege validation error messages clear and actionable
 - ✅ Support procedures documented for common failure scenarios
 - ✅ Performance impact measured (none expected)
@@ -878,12 +878,12 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 
 **Handling:**
 - vSphere API backward compatible (newer API works with older vCenter)
-- Privilege names stable across vSphere 7.0 and 8.0
+- Privilege names stable across vSphere 8.0 versions
 - Credential validation uses lowest common denominator API calls
 
 **Validation:**
-- Test credentials created on vSphere 7.0 used on vSphere 8.0
-- Test credentials created on vSphere 8.0 used on vSphere 7.0
+- Test credentials created on vSphere 8.0 U1 used on vSphere 8.0 U2
+- Test credentials created on vSphere 8.0 U2 used on vSphere 8.0 U1
 
 ## Operational Aspects of API Extensions
 
@@ -1119,7 +1119,7 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 ### Development Infrastructure
 
 **vSphere test environment:**
-- vSphere 7.0 U3 (minimum)
+- vSphere 8.0 U1 (minimum)
 - vSphere 8.0 U1 (recommended)
 - Two vCenter instances for multi-vCenter testing
 - Sufficient compute (minimum 3 ESXi hosts per vCenter)
