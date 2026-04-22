@@ -99,6 +99,8 @@ projects:
   fork_url: https://github.com/openshift-splat-team/provider-certification-plugins
 - name: opct
   fork_url: https://github.com/openshift-splat-team/opct
+- name: release
+  fork_url: https://github.com/openshift-splat-team/release
 views:
 - name: PO
   prefixes:
