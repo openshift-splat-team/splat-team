@@ -93,6 +93,8 @@ projects:
   fork_url: https://github.com/openshift-splat-team/cluster-storage-operator
 - name: vsphere-problem-detector
   fork_url: https://github.com/openshift-splat-team/vsphere-problem-detector
+- name: govmomi
+  fork_url: https://github.com/openshift-splat-team/govmomi
 views:
 - name: PO
   prefixes:
