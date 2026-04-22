@@ -47,13 +47,10 @@ This shared credential model creates critical security and compliance issues:
 > As a vSphere administrator in a regulated enterprise, I need to provide separate credentials for OpenShift installation versus runtime operations, so that I can meet SOC2 audit requirements for privilege separation and limit the blast radius of compromised credentials.
 
 **Story 2: Multi-team environment**
-> As a platform engineering team lead, I need installation-time credentials to be removed from the cluster after deployment completes, so that runtime operators cannot accidentally or maliciously provision new infrastructure without going through our change control process.
+> As a platform engineering team lead, I need runtime operators to have properly scoped credentials with minimal privileges required for their specific functions, so that I can limit the blast radius of compromised credentials and meet change control requirements.
 
 **Story 3: Compliance officer**
 > As a compliance officer, I need vCenter audit logs to clearly distinguish between OpenShift installer actions and runtime operator actions, so that I can demonstrate separation of duties during security audits.
-
-**Story 4: Operations team**
-> As an operations engineer, I need to rotate vCenter credentials for runtime components without requiring cluster reinstallation, so that I can respond to security incidents and meet password rotation policies without downtime.
 
 ### Goals
 
@@ -131,44 +128,44 @@ This shared credential model creates critical security and compliance issues:
              namespace: openshift-config
    ```
 
-3. **Create credential secrets**:
-   ```bash
-   # Installer validates secrets exist and contain credentials for all vCenters
-   oc create secret generic vsphere-installer-creds \
-     --from-literal=vcenter.example.com.username=installer@vsphere.local \
-     --from-literal=vcenter.example.com.password='...'
-   
-   # Repeat for each component...
-   ```
-
-4. **Run installation**:
+3. **Run installation**:
    ```bash
    openshift-install create cluster --dir ./install
    
    # Installer:
-   # - Validates all credential secrets exist
+   # - Reads component credentials from install-config.yaml
    # - Validates privileges per component per vCenter
    # - Provisions infrastructure using installer credentials
-   # - Creates component secrets in appropriate namespaces
-   # - Does NOT persist installer credentials in cluster
+   # - Creates component secrets in kube-system namespace
+   # - Creates vsphere-cloud-credentials secret (existing behavior, now with operational credentials)
+   # - CCO detects component secrets and provisions to operator namespaces
    ```
 
 **Component perspective (runtime):**
 
-1. **Machine API Operator**:
-   - Reads `vsphere-machine-api-creds` secret
+1. **CCO (Cloud Credential Operator)**:
+   - Detects component-specific credential secrets in kube-system
+   - Provisions credentials to operator namespaces based on CredentialsRequest CRs
+   - Validates privileges per component before provisioning
+
+2. **Machine API Operator**:
+   - Reads `vsphere-machine-api-creds` secret in openshift-machine-api namespace
    - Extracts credentials keyed by vCenter FQDN
    - Validates privileges before creating MachineSet
    - Uses restricted credentials for VM lifecycle operations
 
-2. **CSI Driver**:
-   - Reads `vsphere-storage-creds` secret
+3. **CSI Driver**:
+   - Reads `vsphere-storage-creds` secret in openshift-cluster-csi-drivers namespace
    - Uses storage-scoped credentials for volume operations
    - Reports privilege validation errors to cluster operator status
 
-3. **Cloud Controller Manager**:
-   - Reads `vsphere-cloud-controller-creds` secret
+4. **Cloud Controller Manager**:
+   - Reads `vsphere-cloud-controller-creds` secret in openshift-cloud-controller-manager namespace
    - Uses read-only credentials for node discovery
+
+5. **vSphere Problem Detector**:
+   - Reads `vsphere-diagnostics-creds` secret in openshift-config namespace
+   - Uses read-only credentials for configuration validation and health monitoring
 
 #### Migration Workflow (Existing Cluster)
 
@@ -176,38 +173,22 @@ This shared credential model creates critical security and compliance issues:
 
 1. **Administrator creates new component credentials** in vCenter with restricted privileges
 
-2. **Create new component secrets**:
+2. **Create component secrets in kube-system**:
    ```bash
    oc create secret generic vsphere-machine-api-creds \
-     -n openshift-machine-api \
+     -n kube-system \
      --from-literal=vcenter.example.com.username=machine-api@vsphere.local \
      --from-literal=vcenter.example.com.password='...'
+   
+   # Repeat for storage, cloud-controller, diagnostics
    ```
 
-3. **Update Infrastructure CR**:
-   ```yaml
-   apiVersion: config.openshift.io/v1
-   kind: Infrastructure
-   metadata:
-     name: cluster
-   spec:
-     platformSpec:
-       type: VSphere
-       vsphere:
-         componentCredentials:
-           machineAPI:
-             secretRef:
-               name: vsphere-machine-api-creds
-               namespace: openshift-machine-api
-           # ... other components
-   ```
-
-4. **Operators** detect component-specific credentials:
-   - Operators check for component-specific credential secrets
-   - Validate credentials and privileges per component
-   - Update operator deployment environment to reference new secrets
-   - Operators gracefully restart and adopt new credentials
-   - Original shared credential remains available as fallback
+3. **CCO detects and provisions credentials**:
+   - CCO detects presence of component-specific credential secrets in kube-system
+   - CCO validates credentials and privileges per component
+   - CCO provisions credentials to operator namespaces based on CredentialsRequest CRs
+   - Operators gracefully restart and adopt new credentials from their namespaces
+   - Original shared credential in vsphere-cloud-credentials remains available as fallback
 
 5. **Verification**:
    ```bash
@@ -384,10 +365,7 @@ vcenters:
 
 #### Single-node Deployments or MicroShift
 
-**SNO considerations:**
-- Reduced component footprint (no Machine API on single-node)
-- Required credentials: storage, cloud controller, diagnostics
-- Machine API credentials optional (no compute scaling)
+**Note:** Single-Node OpenShift (SNO) is not supported on vSphere platform.
 
 **MicroShift:**
 - Out of scope (MicroShift does not support vSphere platform integration)
@@ -502,11 +480,11 @@ func (r *ReconcileCredentialsRequest) validateVSphereCredentials(cr *minterv1.Cr
 #### Credential Distribution Flow
 
 **Installation:**
-1. Installer reads credentials from install-config.yaml or ~/.vsphere/credentials
+1. Installer reads credentials from install-config.yaml or ~/.vsphere/credentials.yaml
 2. Validates all component credentials against all vCenters
 3. Provisions infrastructure using installer credentials
-4. Creates component secrets in appropriate namespaces
-5. Does NOT persist installer credentials in cluster
+4. Creates component secrets in kube-system namespace
+5. Persists installer credentials in vsphere-cloud-credentials secret (may be removed in future enhancement)
 
 **Runtime:**
 1. CCO reads Infrastructure CR to determine credentials mode
@@ -523,11 +501,11 @@ func (r *ReconcileCredentialsRequest) validateVSphereCredentials(cr *minterv1.Cr
 
 **Implementation**:
 1. Installer completes infrastructure provisioning using installer credentials
-2. Installer creates all component credential secrets in cluster
+2. Installer creates all component credential secrets in kube-system namespace
 3. Installer does NOT modify the Infrastructure CR `credentialsMode` field
-4. Operators detect presence of component-specific credential secrets and adopt them
-5. Operators restart and begin using component-specific credentials
-6. **Only after all operators report healthy**: installer credentials removed from cluster state
+4. CCO detects presence of component-specific credential secrets and provisions them based on the component request
+5. Operators restart and begin using component-specific credentials from their respective namespaces
+6. Installer credentials remain persisted in vsphere-cloud-credentials for now (may be removed in future enhancement)
 
 **Failure handling**:
 - If component credential validation fails → installation fails (no partial state)
@@ -585,11 +563,12 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 **Migration path**:
 1. Cluster starts in passthrough mode with shared credential
 2. Administrator creates component credentials in vCenter
-3. Administrator creates component secrets in cluster (without modifying Infrastructure CR)
-4. Operators detect presence of component-specific credential secrets
-5. Operators validate component credentials
-6. Operators adopt new credentials and restart
-7. Original shared credential can be removed after all operators report healthy
+3. Administrator creates component secrets in kube-system namespace
+4. CCO detects presence of component-specific credential secrets in kube-system
+5. CCO validates component credentials
+6. CCO provisions credentials to operator namespaces
+7. Operators adopt new credentials from their namespaces and restart
+8. Original shared credential can be removed after all operators report healthy
 
 **Fallback**:
 - If component secret missing → fall back to shared credential
@@ -829,16 +808,17 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 
 3. **Post-upgrade migration** (administrator-initiated):
    - Administrator creates per-component vCenter roles
-   - Administrator creates component secrets in cluster
-   - Operators detect component-specific credential secrets
-   - Operators validate component credentials
-   - Operators gracefully restart with new credentials
+   - Administrator creates component secrets in kube-system namespace
+   - CCO detects component-specific credential secrets in kube-system
+   - CCO validates component credentials
+   - CCO provisions credentials to operator namespaces
+   - Operators gracefully restart with new credentials from their namespaces
    - **No downtime** (operators restart one at a time)
 
 4. **Rollback** (if migration fails):
-   - Administrator removes component-specific credential secrets
-   - Operators detect absence of component credentials and revert to shared credential
-   - Component secrets can be deleted (optional)
+   - Administrator removes component-specific credential secrets from kube-system
+   - CCO detects absence of component credentials and reverts to shared credential
+   - Operators fall back to shared credential from vsphere-cloud-credentials
 
 **Validation requirements:**
 - Upgrade must NOT require per-component credentials
@@ -855,9 +835,9 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 
 **If cluster is using per-component credentials:**
 - **Before downgrade**: Administrator must revert to shared credential mode
-  1. Ensure shared credential secret exists and is valid
-  2. Remove component-specific credential secrets
-  3. Verify operators detect shared credential and restart
+  1. Ensure shared credential secret (vsphere-cloud-credentials) exists and is valid
+  2. Remove component-specific credential secrets from kube-system
+  3. Verify CCO detects removal and falls back to shared credential
   4. Verify all operators report healthy with shared credential
   5. Proceed with downgrade
 
@@ -912,11 +892,11 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 **New fields:**
 - `spec.platformSpec.vsphere.componentCredentials` (map of component → secret reference)
 
-**Note**: The `credentialsMode` field is not used in this design. Operators detect component-specific credentials by checking for the presence of component-specific credential secrets, not by reading a mode field.
+**Note**: The `credentialsMode` field is not used in this design. CCO detects component-specific credentials by checking for the presence of component-specific credential secrets in kube-system, not by reading a mode field.
 
 **Impact:**
-- Operators check for component-specific credential secrets on every reconciliation loop
-- Presence of component secrets triggers operator credential validation and restart
+- CCO checks for component-specific credential secrets in kube-system on every reconciliation loop
+- Presence of component secrets in kube-system triggers CCO credential validation and provisioning to operator namespaces
 - Secrets must exist and be valid (invalid secrets block reconciliation)
 
 **Performance:**
@@ -960,18 +940,20 @@ oc get infrastructure cluster -o jsonpath='{.spec.platformSpec.vsphere.component
 
 **Check component credential secrets:**
 ```bash
-# Machine API
+# Source secrets in kube-system (created by installer, read by CCO)
+oc get secret vsphere-machine-api-creds -n kube-system
+oc get secret vsphere-storage-creds -n kube-system
+oc get secret vsphere-cloud-controller-creds -n kube-system
+oc get secret vsphere-diagnostics-creds -n kube-system
+
+# Provisioned secrets in operator namespaces (created by CCO, read by operators)
 oc get secret vsphere-machine-api-creds -n openshift-machine-api
-oc get secret vsphere-machine-api-creds -n openshift-machine-api -o jsonpath='{.data}' | jq 'keys'
-
-# Storage
 oc get secret vsphere-storage-creds -n openshift-cluster-csi-drivers
-
-# Cloud Controller
 oc get secret vsphere-cloud-controller-creds -n openshift-cloud-controller-manager
-
-# Diagnostics
 oc get secret vsphere-diagnostics-creds -n openshift-config
+
+# Check secret contents (example for machine-api)
+oc get secret vsphere-machine-api-creds -n kube-system -o jsonpath='{.data}' | jq 'keys'
 ```
 
 **Check CCO validation status:**
@@ -1200,8 +1182,9 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 **Credential handling:**
 - Install-config.yaml deleted after reading (existing installer behavior)
 - Credentials file enforced 0600 permissions
-- Secrets stored in appropriate namespaces with RBAC restrictions
-- Installer credentials never persisted in cluster
+- Component credential secrets stored in kube-system namespace
+- CCO provisions credentials to operator namespaces with RBAC restrictions
+- Installer credentials persisted in vsphere-cloud-credentials secret (may be removed in future enhancement)
 
 **Privilege minimization:**
 - Each component receives minimum required privileges
@@ -1228,9 +1211,9 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 **When** the administrator runs `openshift-install create cluster`  
 **Then** the installer validates all component credentials against all vCenters  
 **And** the installer provisions infrastructure using installer credentials  
-**And** the installer creates component secrets in appropriate namespaces  
-**And** the installer does NOT persist installer credentials in the cluster  
-**And** operators detect component-specific credential secrets  
+**And** the installer creates component secrets in kube-system namespace  
+**And** CCO detects component-specific credential secrets in kube-system  
+**And** CCO provisions credentials to operator namespaces  
 **And** all cluster operators report healthy using component-specific credentials  
 **And** machine creation uses machine-api credentials  
 **And** storage provisioning uses storage credentials  
@@ -1239,10 +1222,11 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 
 **Given** an existing OpenShift cluster using passthrough mode (shared credential)  
 **When** an administrator creates per-component vCenter roles  
-**And** the administrator creates component secrets in the cluster  
-**Then** operators detect the presence of component-specific credential secrets  
-**And** operators validate all component credentials  
-**And** operators gracefully restart and adopt new credentials  
+**And** the administrator creates component secrets in kube-system namespace  
+**Then** CCO detects the presence of component-specific credential secrets in kube-system  
+**And** CCO validates all component credentials  
+**And** CCO provisions credentials to operator namespaces  
+**And** operators gracefully restart and adopt new credentials from their namespaces  
 **And** no cluster downtime occurs during migration  
 **And** all cluster operators report healthy  
 **And** machine operations succeed with scoped credentials  
