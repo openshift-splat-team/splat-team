@@ -25,16 +25,31 @@ Design doc for epic #<number>
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 git push -u origin epic-14-design
+
+# Create PR for review
+gh pr create --head epic-14-design --base main \
+  --title "Design: <epic-title> (Epic #<number>)" \
+  --body "Design review for epic #<number>
+  
+Issue: https://github.com/<org>/<repo>/issues/<number>
+Status: po:design-review
+
+[Include design summary, key elements, acceptance criteria]
+
+Please review and approve to advance to story planning."
 ```
 
-**When to push:**
-- Immediately after creating the design document (before moving to lead:design-review)
-- After revisions (if design is rejected and revised)
+**When to create PR:**
+- Immediately after pushing the design branch (before moving to lead:design-review)
+- Include link to epic issue in PR body
+- Summarize key design elements for quick review
 
 **Review workflow:**
 - Design doc lives on branch during review phases (lead:design-review, po:design-review)
-- Operators review via GitHub web UI or by checking out the branch
-- Once approved and stories are created, merge the branch to main
+- Operators review via GitHub PR interface (inline comments, suggestions, approval)
+- Incorporate feedback via additional commits to the same branch
+- Once approved, merge the PR and advance to arch:plan
+- Comment on epic issue with PR link for traceability
 
 ### Story Implementation Branching
 
@@ -66,6 +81,6 @@ git push -u origin story-42-installer-credential-validation
 
 ## Merge Strategy
 
-- **Design branches:** Merge to main after epic approval (po:design-review → arch:plan transition)
-- **Story branches:** Merge via PR after code review and tests pass
-- **Always:** Use merge commits (not squash) to preserve co-authorship
+- **Design PRs:** Merge to main after human approval (po:design-review → arch:plan transition). Use "Merge commit" to preserve co-authorship. Architect can proceed with story planning once PR is merged.
+- **Story PRs:** Merge via PR after code review and tests pass. Use "Merge commit" to preserve co-authorship.
+- **Always:** Use merge commits (not squash or rebase) to preserve co-authorship and commit history
