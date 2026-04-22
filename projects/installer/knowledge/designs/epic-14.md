@@ -31,7 +31,7 @@ OpenShift currently uses a single vCenter credential across all components:
 - **Machine API Operator**: Manages compute node lifecycle
 - **CSI Driver**: Handles persistent storage operations
 - **Cloud Controller Manager**: Discovers and manages node infrastructure
-- **Diagnostics/Must-Gather**: Collects troubleshooting data
+- **vSphere Problem Detector**: Validates vSphere configuration and monitors cluster health
 
 This shared credential model creates critical security and compliance issues:
 
@@ -58,11 +58,11 @@ This shared credential model creates critical security and compliance issues:
 ### Goals
 
 1. **Privilege separation**: Enable distinct credentials for:
-   - **Installer**: High-privilege provisioning operations
+   - **Installer**: High-privilege provisioning operations (~50 privileges)
    - **Machine API Operator**: VM lifecycle management (35 privileges)
    - **CSI Driver**: Storage operations (10-15 privileges)
-   - **Cloud Controller Manager**: Read-only node discovery (10 privileges)
-   - **Diagnostics**: Read-only monitoring (5 privileges)
+   - **Cloud Controller Manager**: Read-only node discovery (~10 privileges, requires verification)
+   - **vSphere Problem Detector**: Configuration validation and health monitoring (~16 privileges: 11 vCenter-level for tagging/CNS/sessions, 1 datacenter for System.Read, 4 datastore for read-only checks)
 
 2. **Migration path**: Support zero-downtime migration of existing single-credential clusters to multi-credential model
 
@@ -108,7 +108,6 @@ This shared credential model creates critical security and compliance issues:
        - server: vcenter.example.com
          datacenters:
          - DC1
-       credentialsMode: PerComponent
        componentCredentials:
          installer:
            secretRef:
@@ -195,7 +194,6 @@ This shared credential model creates critical security and compliance issues:
      platformSpec:
        type: VSphere
        vsphere:
-         credentialsMode: PerComponent
          componentCredentials:
            machineAPI:
              secretRef:
@@ -204,10 +202,10 @@ This shared credential model creates critical security and compliance issues:
            # ... other components
    ```
 
-4. **Cloud Credential Operator** detects mode change:
-   - Validates new credential secrets exist
-   - Validates privileges per component
-   - Updates operator deployment environment to reference new secrets
+4. **Operators** detect component-specific credentials:
+   - Operators check for component-specific credential secrets
+   - Validate credentials and privileges per component
+   - Update operator deployment environment to reference new secrets
    - Operators gracefully restart and adopt new credentials
    - Original shared credential remains available as fallback
 
@@ -243,9 +241,6 @@ spec:
         datacenters: [DC1]
       - server: vcenter2.example.com
         datacenters: [DC2]
-      
-      # NEW: Credentials mode
-      credentialsMode: PerComponent  # or "Passthrough" (default)
       
       # NEW: Component credential references
       componentCredentials:
@@ -324,8 +319,6 @@ platform:
       - DC2
     
     # NEW: Credentials configuration
-    credentialsMode: PerComponent
-    
     componentCredentials:
       installer:
         username: "installer@vsphere.local"
@@ -344,62 +337,37 @@ platform:
         password: "..."
 ```
 
-**Alternative: Credentials file** (`~/.vsphere/credentials`):
+**Alternative: Credentials file** (`~/.vsphere/credentials.yaml`):
 
-```ini
-[vcenter1.example.com]
-installer_username = installer@vsphere.local
-installer_password = ...
-machine_api_username = machine-api@vsphere.local
-machine_api_password = ...
-storage_username = storage@vsphere.local
-storage_password = ...
-cloud_controller_username = cloud-controller@vsphere.local
-cloud_controller_password = ...
-diagnostics_username = diagnostics@vsphere.local
-diagnostics_password = ...
-
-[vcenter2.example.com]
-installer_username = installer@vc2.local
-installer_password = ...
-# ... additional components
+```yaml
+vcenters:
+  vcenter1.example.com:
+    installer:
+      username: installer@vsphere.local
+      password: ...
+    machine_api:
+      username: machine-api@vsphere.local
+      password: ...
+    storage:
+      username: storage@vsphere.local
+      password: ...
+    cloud_controller:
+      username: cloud-controller@vsphere.local
+      password: ...
+    diagnostics:
+      username: diagnostics@vsphere.local
+      password: ...
+  
+  vcenter2.example.com:
+    installer:
+      username: installer@vc2.local
+      password: ...
+    # ... additional components
 ```
 
 ### Topology Considerations
 
-#### Hypershift / Hosted Control Planes
-
-**Hosted cluster model:**
-- Management cluster hosts control plane components
-- Hosted cluster workload runs on separate infrastructure
-
-**Credential architecture:**
-1. **Management cluster**: Uses own vSphere credentials for control plane VMs
-2. **Hosted cluster**: References guest cluster vSphere credentials via HostedCluster CR
-
-**Implementation:**
-```yaml
-apiVersion: hypershift.openshift.io/v1beta1
-kind: HostedCluster
-metadata:
-  name: guest-cluster
-spec:
-  platform:
-    type: Agent
-    vsphere:
-      credentialsMode: PerComponent
-      componentCredentials:
-        machineAPI:
-          secretRef:
-            name: guest-vsphere-machine-api-creds
-            namespace: clusters
-        storage:
-          secretRef:
-            name: guest-vsphere-storage-creds
-            namespace: clusters
-```
-
-**Note**: Installer credentials not needed (management cluster provisions infrastructure). Only runtime component credentials required.
+**Note**: Hypershift / Hosted Control Planes is not supported on vSphere platform.
 
 #### Standalone Clusters
 
@@ -556,9 +524,9 @@ func (r *ReconcileCredentialsRequest) validateVSphereCredentials(cr *minterv1.Cr
 **Implementation**:
 1. Installer completes infrastructure provisioning using installer credentials
 2. Installer creates all component credential secrets in cluster
-3. Installer updates Infrastructure CR with `credentialsMode: PerComponent`
-4. CCO detects mode change and validates all component credentials
-5. Operators restart and adopt new credentials
+3. Installer does NOT modify the Infrastructure CR `credentialsMode` field
+4. Operators detect presence of component-specific credential secrets and adopt them
+5. Operators restart and begin using component-specific credentials
 6. **Only after all operators report healthy**: installer credentials removed from cluster state
 
 **Failure handling**:
@@ -615,13 +583,13 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 - No privilege validation
 
 **Migration path**:
-1. Cluster starts in passthrough mode
+1. Cluster starts in passthrough mode with shared credential
 2. Administrator creates component credentials in vCenter
-3. Administrator creates component secrets in cluster
-4. Administrator updates Infrastructure CR to `credentialsMode: PerComponent`
-5. CCO validates and distributes credentials
-6. Operators adopt new credentials
-7. Original shared credential can be removed
+3. Administrator creates component secrets in cluster (without modifying Infrastructure CR)
+4. Operators detect presence of component-specific credential secrets
+5. Operators validate component credentials
+6. Operators adopt new credentials and restart
+7. Original shared credential can be removed after all operators report healthy
 
 **Fallback**:
 - If component secret missing → fall back to shared credential
@@ -862,14 +830,14 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 3. **Post-upgrade migration** (administrator-initiated):
    - Administrator creates per-component vCenter roles
    - Administrator creates component secrets in cluster
-   - Administrator updates Infrastructure CR: `credentialsMode: PerComponent`
-   - CCO validates component credentials
+   - Operators detect component-specific credential secrets
+   - Operators validate component credentials
    - Operators gracefully restart with new credentials
    - **No downtime** (operators restart one at a time)
 
 4. **Rollback** (if migration fails):
-   - Administrator updates Infrastructure CR: `credentialsMode: Passthrough`
-   - Operators revert to shared credential
+   - Administrator removes component-specific credential secrets
+   - Operators detect absence of component credentials and revert to shared credential
    - Component secrets can be deleted (optional)
 
 **Validation requirements:**
@@ -886,16 +854,17 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 - Downgrade proceeds normally
 
 **If cluster is using per-component credentials:**
-- **Before downgrade**: Administrator must revert to passthrough mode
-  1. Update Infrastructure CR: `credentialsMode: Passthrough`
-  2. Ensure shared credential secret exists and is valid
-  3. Verify all operators report healthy with shared credential
-  4. Proceed with downgrade
+- **Before downgrade**: Administrator must revert to shared credential mode
+  1. Ensure shared credential secret exists and is valid
+  2. Remove component-specific credential secrets
+  3. Verify operators detect shared credential and restart
+  4. Verify all operators report healthy with shared credential
+  5. Proceed with downgrade
 
 - **If administrator downgrades without reverting:**
   - OpenShift N does not understand per-component credential fields
   - Operators will fail to find credentials
-  - **Mitigation**: Pre-downgrade validation check warns if per-component mode active
+  - **Mitigation**: Pre-downgrade validation check warns if component-specific credentials are present
 
 **Documentation requirements:**
 - Downgrade documentation must include revert-to-passthrough procedure
@@ -941,13 +910,14 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 ### Infrastructure CR Changes
 
 **New fields:**
-- `spec.platformSpec.vsphere.credentialsMode` (enum: Passthrough, PerComponent)
 - `spec.platformSpec.vsphere.componentCredentials` (map of component → secret reference)
 
+**Note**: The `credentialsMode` field is not used in this design. Operators detect component-specific credentials by checking for the presence of component-specific credential secrets, not by reading a mode field.
+
 **Impact:**
-- Read by CCO on every reconciliation loop
-- Changes trigger operator credential validation and restart
-- Must be validated before applying (invalid secret references block reconciliation)
+- Operators check for component-specific credential secrets on every reconciliation loop
+- Presence of component secrets triggers operator credential validation and restart
+- Secrets must exist and be valid (invalid secrets block reconciliation)
 
 **Performance:**
 - Negligible (one-time read per CCO reconciliation, ~30s interval)
@@ -982,9 +952,10 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
 
 ### Diagnostic Commands
 
-**Check credential mode:**
+**Check for component-specific credentials:**
 ```bash
-oc get infrastructure cluster -o jsonpath='{.spec.platformSpec.vsphere.credentialsMode}'
+# Check if componentCredentials are configured in Infrastructure CR
+oc get infrastructure cluster -o jsonpath='{.spec.platformSpec.vsphere.componentCredentials}' | jq .
 ```
 
 **Check component credential secrets:**
@@ -1039,9 +1010,9 @@ oc logs -n openshift-cloud-controller-manager -l app=cloud-controller-manager --
 
 **Diagnosis:**
 ```bash
-# Check credential mode
-oc get infrastructure cluster -o jsonpath='{.spec.platformSpec.vsphere.credentialsMode}'
-# Output: PerComponent
+# Check if component credentials are configured
+oc get infrastructure cluster -o jsonpath='{.spec.platformSpec.vsphere.componentCredentials}' | jq .
+# Output: {...} (component credentials are configured)
 
 # Check if component secret exists
 oc get secret vsphere-machine-api-creds -n openshift-machine-api
@@ -1252,14 +1223,15 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 ### AC1: New cluster installation with per-component credentials
 
 **Given** an administrator has pre-provisioned vCenter roles with appropriate privileges for each component  
-**And** the administrator has created install-config.yaml with `credentialsMode: PerComponent`  
+**And** the administrator has created install-config.yaml with component-specific credentials provided  
 **And** the administrator has provided credentials for installer, machine-api, storage, cloud-controller, and diagnostics components  
 **When** the administrator runs `openshift-install create cluster`  
 **Then** the installer validates all component credentials against all vCenters  
 **And** the installer provisions infrastructure using installer credentials  
 **And** the installer creates component secrets in appropriate namespaces  
 **And** the installer does NOT persist installer credentials in the cluster  
-**And** all cluster operators report healthy  
+**And** operators detect component-specific credential secrets  
+**And** all cluster operators report healthy using component-specific credentials  
 **And** machine creation uses machine-api credentials  
 **And** storage provisioning uses storage credentials  
 
@@ -1268,9 +1240,8 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 **Given** an existing OpenShift cluster using passthrough mode (shared credential)  
 **When** an administrator creates per-component vCenter roles  
 **And** the administrator creates component secrets in the cluster  
-**And** the administrator updates Infrastructure CR to `credentialsMode: PerComponent`  
-**Then** CCO validates all component credentials  
-**And** CCO distributes credentials to operators  
+**Then** operators detect the presence of component-specific credential secrets  
+**And** operators validate all component credentials  
 **And** operators gracefully restart and adopt new credentials  
 **And** no cluster downtime occurs during migration  
 **And** all cluster operators report healthy  
