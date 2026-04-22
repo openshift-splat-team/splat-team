@@ -42,23 +42,49 @@ If `gh repo view` fails (e.g., remote is a local path), extract from git remote:
 TEAM_REPO=$(cd team && git remote get-url origin | sed 's|.*github.com[:/]||;s|\.git$||')
 ```
 
-### 4. Cache project IDs (once per scan cycle)
+### 4. Get all projects in the organization
 
 ```bash
 OWNER=$(echo "$TEAM_REPO" | cut -d/ -f1)
-PROJECT_NUM=$(gh project list --owner "$OWNER" --format json --jq '.projects[0].number')
-PROJECT_ID=$(gh project view "$PROJECT_NUM" --owner "$OWNER" --format json --jq '.id')
-FIELD_DATA=$(gh project field-list "$PROJECT_NUM" --owner "$OWNER" --format json)
-STATUS_FIELD_ID=$(echo "$FIELD_DATA" | jq -r '.fields[] | select(.name=="Status") | .id')
+PROJECT_NUMBERS=$(gh project list --owner "$OWNER" --format json | jq -r '.projects[].number')
 ```
 
-### 5. Query the project board
+### 5. Scan ALL project boards and aggregate issues
+
+Iterate over each project and collect all actionable issues:
 
 ```bash
-gh project item-list "$PROJECT_NUM" --owner "$OWNER" --format json
+ALL_ISSUES=()
+
+for PROJECT_NUM in $PROJECT_NUMBERS; do
+  # Get project metadata
+  PROJECT_ID=$(gh project view "$PROJECT_NUM" --owner "$OWNER" --format json | jq -r '.id')
+  PROJECT_TITLE=$(gh project view "$PROJECT_NUM" --owner "$OWNER" --format json | jq -r '.title')
+  FIELD_DATA=$(gh project field-list "$PROJECT_NUM" --owner "$OWNER" --format json)
+  STATUS_FIELD_ID=$(echo "$FIELD_DATA" | jq -r '.fields[] | select(.name=="Status") | .id')
+  
+  # Query project board
+  ITEMS=$(gh project item-list "$PROJECT_NUM" --owner "$OWNER" --format json)
+  
+  # Extract issues with their status, project number, and project ID
+  # Add to ALL_ISSUES array with metadata: issue_number, status, project_num, project_id, status_field_id
+  
+  # Log scan
+  ITEM_COUNT=$(echo "$ITEMS" | jq '.items | length')
+  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) — board.scan — Project #$PROJECT_NUM ($PROJECT_TITLE): $ITEM_COUNT items" >> team/poll-log.txt
+done
 ```
 
-Parse the JSON to extract items with their Status field values.
+Parse and aggregate all issues from all projects. Prioritize by:
+1. Project number (lower project numbers first)
+2. Status priority within each project
+
+### 5a. Store project context for later use
+
+When you find an actionable issue, store which project it belongs to so the gh skill
+can use the correct PROJECT_NUM, PROJECT_ID, and STATUS_FIELD_ID for status transitions.
+
+You can cache this in the scratchpad or in environment variables.
 
 ### 6. Log to poll-log.txt
 
