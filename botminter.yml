@@ -95,6 +95,8 @@ projects:
   fork_url: https://github.com/openshift-splat-team/vsphere-problem-detector
 - name: govmomi
   fork_url: https://github.com/openshift-splat-team/govmomi
+- name: provider-certification-plugins
+  fork_url: https://github.com/openshift-splat-team/provider-certification-plugins
 views:
 - name: PO
   prefixes:
