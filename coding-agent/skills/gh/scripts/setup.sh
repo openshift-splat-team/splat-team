@@ -27,11 +27,30 @@ fi
 # Resolve project IDs (cache for session)
 OWNER=$(echo "$TEAM_REPO" | cut -d/ -f1)
 
-# Get project number with error checking
-PROJECT_NUM=$(gh project list --owner "$OWNER" --format json 2>&1 | jq -r '.projects[0].number')
-if [ -z "$PROJECT_NUM" ] || [ "$PROJECT_NUM" = "null" ]; then
-  echo "❌ ERROR: No GitHub Project found for organization: $OWNER"
-  exit 1
+# Priority order for determining project number:
+# 1. PROJECT_NUM environment variable (set by board scanner for multi-project support)
+# 2. BotMinter config file
+# 3. First project in the organization (fallback)
+
+# If PROJECT_NUM is already set as environment variable, use it (from board scanner)
+if [ -n "$PROJECT_NUM" ] && [ "$PROJECT_NUM" != "null" ]; then
+  echo "✓ Using project #$PROJECT_NUM from environment"
+else
+  # Get project number from BotMinter config if available
+  CONFIG_FILE="$HOME/.botminter/config.yml"
+  if [ -f "$CONFIG_FILE" ]; then
+    PROJECT_NUM=$(awk '/project_number:/ {print $2}' "$CONFIG_FILE" | head -1)
+  fi
+
+  # Fallback: get first project if not in config
+  if [ -z "$PROJECT_NUM" ] || [ "$PROJECT_NUM" = "null" ]; then
+    PROJECT_NUM=$(gh project list --owner "$OWNER" --format json 2>&1 | jq -r '.projects[0].number')
+  fi
+
+  if [ -z "$PROJECT_NUM" ] || [ "$PROJECT_NUM" = "null" ]; then
+    echo "❌ ERROR: No GitHub Project found for organization: $OWNER"
+    exit 1
+  fi
 fi
 
 # Get project ID with error checking
