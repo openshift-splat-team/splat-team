@@ -91,6 +91,8 @@ projects:
   fork_url: https://github.com/openshift-splat-team/cloud-credential-operator
 - name: cluster-storage-operator
   fork_url: https://github.com/openshift-splat-team/cluster-storage-operator
+- name: vsphere-problem-detector
+  fork_url: https://github.com/openshift-splat-team/vsphere-problem-detector
 views:
 - name: PO
   prefixes:
