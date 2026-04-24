@@ -167,10 +167,30 @@ echo "✓ Acknowledged feedback"
 - "Missing input validation"
 - "Improve naming"
 
-**Response template:**
+**Response workflow:**
+
+**Step 1: Acknowledge and plan**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "$(cat <<EOF
+@reviewer, working on this now.
+
+**Planned changes:**
+- Add error handling for <case>
+- Simplify <function> logic
+- Validate <input> parameters
+
+I'll update the PR shortly.
+
+---
+*Working on it - superman-atlas*
+EOF
+)"
+```
+
+**Step 2: Make code changes**
 ```bash
 # Make code quality improvements
-# Commit with descriptive message
+git add <files>
 git commit -m "refactor: Improve <component> per review feedback
 
 - Add error handling for <case>
@@ -179,6 +199,32 @@ git commit -m "refactor: Improve <component> per review feedback
 - Rename <variable> for clarity
 
 Reviewer: @<username>"
+git push
+```
+
+**Step 3: Report completion**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "$(cat <<EOF
+@reviewer, changes complete! ✅
+
+**Summary of changes:**
+- ✅ Added error handling for nil credentials in \`ProcessCredentials()\`
+- ✅ Simplified \`ValidateConfig()\` by extracting helper function
+- ✅ Added input validation for all public API functions
+- ✅ Renamed \`data\` → \`credentialData\` for clarity
+
+**Commits:**
+- \`$(git rev-parse --short HEAD)\` - $(git log -1 --format=%s)
+
+**Files changed:**
+$(git diff --stat HEAD~1..HEAD)
+
+Ready for re-review!
+
+---
+*Changes complete - superman-atlas*
+EOF
+)"
 ```
 
 ### Category 2: Missing Tests
@@ -189,9 +235,17 @@ Reviewer: @<username>"
 - "Add edge case tests"
 - "Missing error path tests"
 
-**Response template:**
+**Response workflow:**
+
+**Step 1: Acknowledge**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "@reviewer, adding test coverage for these scenarios now."
+```
+
+**Step 2: Add tests**
 ```bash
 # Add requested tests
+git add <test-files>
 git commit -m "test: Add test coverage per review feedback
 
 - Add tests for <scenario>
@@ -200,6 +254,36 @@ git commit -m "test: Add test coverage per review feedback
 - Increase coverage to <percentage>%
 
 Reviewer: @<username>"
+git push
+```
+
+**Step 3: Report results**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "$(cat <<EOF
+@reviewer, test coverage added! ✅
+
+**New tests:**
+- \`TestMultiVCenterValidation\` - validates multiple vCenter configurations
+- \`TestCredentialRotation\` - tests edge cases during rotation
+- \`TestErrorPaths\` - covers error scenarios in credential processing
+
+**Coverage:**
+- Before: 78%
+- After: 91%
+
+**Test results:**
+\`\`\`
+PASS: TestMultiVCenterValidation (0.23s)
+PASS: TestCredentialRotation (0.15s)
+PASS: TestErrorPaths (0.08s)
+\`\`\`
+
+All tests passing!
+
+---
+*Tests added - superman-atlas*
+EOF
+)"
 ```
 
 ### Category 3: Documentation
@@ -210,9 +294,17 @@ Reviewer: @<username>"
 - "Document parameters"
 - "Explain algorithm"
 
-**Response template:**
+**Response workflow:**
+
+**Step 1: Acknowledge**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "@reviewer, adding documentation now."
+```
+
+**Step 2: Add documentation**
 ```bash
 # Add/update documentation
+git add <doc-files>
 git commit -m "docs: Add documentation per review feedback
 
 - Add docstring to <function>
@@ -221,6 +313,37 @@ git commit -m "docs: Add documentation per review feedback
 - Update README with <section>
 
 Reviewer: @<username>"
+git push
+```
+
+**Step 3: Report completion**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "$(cat <<EOF
+@reviewer, documentation added! ✅
+
+**Updates:**
+- ✅ Added docstrings to all public functions in \`actuator.go\`
+- ✅ Documented parameters and return values
+- ✅ Explained validation algorithm in inline comments
+- ✅ Updated README with multi-vCenter configuration example
+
+**Example:**
+\`\`\`go
+// ValidateVCenterConfig validates the provided vCenter configuration
+// against required security constraints and connectivity requirements.
+//
+// Parameters:
+//   - config: The vCenter configuration to validate
+//   - ctx: Context for timeout and cancellation
+//
+// Returns error if validation fails, nil on success
+func ValidateVCenterConfig(config *Config, ctx context.Context) error
+\`\`\`
+
+---
+*Documentation complete - superman-atlas*
+EOF
+)"
 ```
 
 ### Category 4: Security/Compliance
@@ -231,9 +354,17 @@ Reviewer: @<username>"
 - "Validate input sanitization"
 - "Remove hardcoded secret"
 
-**Response template:**
+**Response workflow (HIGHEST PRIORITY):**
+
+**Step 1: Acknowledge immediately**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "🔒 @reviewer, addressing this security issue immediately. ETA: 15 minutes."
+```
+
+**Step 2: Fix security issues**
 ```bash
 # Fix security issues (HIGHEST PRIORITY)
+git add <files>
 git commit -m "security: Fix <vulnerability> per review feedback
 
 - Use constant-time comparison for secrets
@@ -243,6 +374,34 @@ git commit -m "security: Fix <vulnerability> per review feedback
 
 Reviewer: @<username>
 Security-Review: Required"
+git push
+```
+
+**Step 3: Report fix with details**
+```bash
+gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "$(cat <<EOF
+🔒 @reviewer, security issue fixed! ✅
+
+**Vulnerability:** ${VULN_DESCRIPTION}
+
+**Fix applied:**
+- ✅ Replaced string comparison with \`subtle.ConstantTimeCompare()\`
+- ✅ All user input now sanitized via \`validateInput()\`
+- ✅ Credentials moved from hardcoded string to \`os.Getenv("VCENTER_PASSWORD")\`
+- ✅ Added input validation for all external parameters
+
+**Security test:**
+- Added \`TestConstantTimeComparison\` to verify timing-safe comparison
+- Added \`TestInputSanitization\` to verify injection prevention
+
+**Commit:** \`$(git rev-parse --short HEAD)\`
+
+This is a critical fix. Please prioritize re-review.
+
+---
+*Security fix complete - superman-atlas*
+EOF
+)"
 ```
 
 ### Category 5: Questions/Clarifications
@@ -253,9 +412,10 @@ Security-Review: Required"
 - "Have you considered...?"
 - "What about...?"
 
-**Response template:**
+**Response: Comment only (NO code changes)**
+
 ```bash
-# Respond with explanation (no code changes needed)
+# IMPORTANT: Only respond with comment, do NOT make code changes
 gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "$(cat <<EOF
 @reviewer, great question!
 
@@ -265,10 +425,15 @@ gh pr comment "$PR_NUM" --repo "$PROJECT_REPO" --body "$(cat <<EOF
 
 ${ADDITIONAL_CONTEXT}
 
-Let me know if you'd like me to add this explanation to the code comments.
+Let me know if you'd like me to add this explanation as a code comment or update the documentation.
+
+---
+*Response by superman-atlas*
 EOF
 )"
 ```
+
+**Do NOT make code changes for clarification questions unless explicitly requested.**
 
 ## Output Format
 
