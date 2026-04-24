@@ -73,6 +73,10 @@ echo "Working in: $PROJECT_DIR"
 PROJECT_REPO=$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/' | sed 's/.*github.com[:/]\(.*\)/\1/')
 echo "Project repo: $PROJECT_REPO"
 
+# Detect default branch (main or master)
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "master")
+echo "Default branch: $DEFAULT_BRANCH"
+
 # Verify branch exists
 if ! git rev-parse --verify "$BRANCH_NAME" >/dev/null 2>&1; then
   echo "Error: Branch '$BRANCH_NAME' does not exist in $PROJECT_NAME"
@@ -87,14 +91,14 @@ echo "Checking out branch: $BRANCH_NAME"
 git checkout "$BRANCH_NAME"
 
 # Get current branch commits
-COMMIT_COUNT=$(git rev-list --count main..HEAD 2>/dev/null || echo "0")
+COMMIT_COUNT=$(git rev-list --count ${DEFAULT_BRANCH}..HEAD 2>/dev/null || echo "0")
 if [ "$COMMIT_COUNT" = "0" ]; then
-  echo "Warning: No commits on this branch ahead of main"
+  echo "Warning: No commits on this branch ahead of $DEFAULT_BRANCH"
   COMMIT_LOG=$(git log --oneline -5)
   DIFF_STAT=$(git diff --stat HEAD~5..HEAD 2>/dev/null || echo "No changes")
 else
-  COMMIT_LOG=$(git log --oneline main..HEAD)
-  DIFF_STAT=$(git diff --stat main..HEAD)
+  COMMIT_LOG=$(git log --oneline ${DEFAULT_BRANCH}..HEAD)
+  DIFF_STAT=$(git diff --stat ${DEFAULT_BRANCH}..HEAD)
 fi
 
 COMMIT_HASH=$(git rev-parse --short HEAD)
@@ -164,7 +168,7 @@ Latest commit: \`${COMMIT_HASH}\`
 
   PR_URL=$(gh pr create \
     --repo "$PROJECT_REPO" \
-    --base main \
+    --base "$DEFAULT_BRANCH" \
     --head "$BRANCH_NAME" \
     --title "Story #${STORY_NUM}: ${STORY_TITLE}" \
     --body "$PR_BODY" 2>&1)
