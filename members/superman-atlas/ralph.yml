@@ -554,11 +554,12 @@ hats:
 
   dev_implementer:
     name: Developer
-    description: Implements the story, runs tests. Triggered by direct chain or rejection loop.
+    description: Implements the story, runs tests. Triggered by direct chain, rejection loop, or PR feedback.
     triggers:
       - dev.implement
       - dev.rejected
       - qe.rejected
+      - dev.pr-feedback
     publishes:
       - dev.code_review
       - dev.implement.failed

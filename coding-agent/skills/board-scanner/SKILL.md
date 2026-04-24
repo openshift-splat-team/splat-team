@@ -70,7 +70,19 @@ Use `$(date -u +%Y-%m-%dT%H:%M:%SZ)` for all timestamps.
 2026-03-02T10:15:01Z — board.scan — END
 ```
 
-### 7. Auto-advance
+### 7. Monitor active PRs
+
+After scanning the board, check all active staging PRs for review feedback:
+
+```bash
+ralph tools skill load monitor-active-prs
+scan_all_prs
+```
+
+This scans all open PRs in `openshift-splat-team/*` forks for review comments
+and emits `dev.pr-feedback` events when unaddressed feedback is found.
+
+### 8. Auto-advance
 
 Before dispatching, handle auto-advance statuses. Use the cached IDs to
 transition statuses via `gh project item-edit`:
@@ -99,7 +111,7 @@ Auto-advance: arch:sign-off → po:merge
 After auto-advancing all eligible issues, continue to dispatch with the
 updated board state.
 
-### 8. Dispatch
+### 9. Dispatch
 
 Dispatch based on the highest-priority project status found. Process one
 item at a time. Epics before stories. Within each category, follow
