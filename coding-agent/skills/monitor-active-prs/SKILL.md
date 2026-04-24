@@ -21,7 +21,10 @@ This skill is called by the board scanner to check PRs in parallel with issue sc
 ## What It Does
 
 1. **Find Active PRs** - Lists all open PRs in staging forks
-2. **Check for Feedback** - Looks for review comments and changes requested
+2. **Check for Feedback** - Looks for:
+   - Reviews with "CHANGES_REQUESTED" state
+   - Inline review comments (code-level feedback)
+   - PR-level comments (general discussions)
 3. **Emit Events** - Triggers dev.pr-feedback for PRs needing response
 
 ## Implementation
@@ -102,7 +105,40 @@ check_pr_feedback() {
     fi
   fi
   
-  # Check for comments (questions/discussions)
+  # Check for inline review comments (from /pulls/:pull_number/comments)
+  REVIEW_COMMENTS=$(gh api "repos/openshift-splat-team/${project}/pulls/${pr_num}/comments" \
+    --jq '[.[] | select(.user.login != "splat-sdlc-agent[bot]")] | length')
+  
+  if [ "$REVIEW_COMMENTS" -gt 0 ]; then
+    # Get the most recent review comment
+    LATEST_REVIEW_COMMENT=$(gh api "repos/openshift-splat-team/${project}/pulls/${pr_num}/comments" \
+      --jq '[.[] | select(.user.login != "splat-sdlc-agent[bot]")] | sort_by(.created_at) | reverse | .[0]')
+    
+    REVIEWER=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.user.login')
+    COMMENT_TIME=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.created_at')
+    
+    # Check if already responded to this review comment
+    LAST_RESPONSE=$(echo "$PR_DATA" | jq -r '
+      [.comments[] | 
+       select(.author.login == "splat-sdlc-agent[bot]") |
+       select(.body | contains("@'"$REVIEWER"'"))] |
+      sort_by(.createdAt) |
+      reverse |
+      .[0].createdAt // empty
+    ')
+    
+    if [ -z "$LAST_RESPONSE" ] || [ "$COMMENT_TIME" \> "$LAST_RESPONSE" ]; then
+      echo "PR #${pr_num} (story #${STORY_NUM}) has ${REVIEW_COMMENTS} inline review comment(s) from @${REVIEWER}"
+      
+      # Emit event to trigger response
+      ralph tools pubsub publish dev.pr-feedback \
+        "story=${STORY_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
+      
+      return 0
+    fi
+  fi
+  
+  # Check for PR-level comments (questions/discussions on the PR itself)
   RECENT_COMMENTS=$(echo "$PR_DATA" | jq -r '
     [.comments[] | 
      select(.author.login != "splat-sdlc-agent[bot]") |
@@ -111,7 +147,7 @@ check_pr_feedback() {
   ')
   
   if [ "$RECENT_COMMENTS" -gt 0 ]; then
-    echo "PR #${pr_num} (story #${STORY_NUM}) has ${RECENT_COMMENTS} comments"
+    echo "PR #${pr_num} (story #${STORY_NUM}) has ${RECENT_COMMENTS} PR-level comment(s)"
     
     # Emit event for discussion monitoring
     ralph tools pubsub publish dev.pr-discussion \
