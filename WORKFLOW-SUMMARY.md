@@ -192,6 +192,12 @@ Complete end-to-end workflow for automated software development with human revie
 
 **Auto-advance** → `done`
 
+**After marking story as done:**
+- Update parent epic's enhancement document
+- Document implementation vs design
+- Note deviations and lessons learned
+- Commit to team repo
+
 ---
 
 ### 13. Epic Monitoring (`arch:in_progress`)
@@ -325,7 +331,9 @@ qe:verify → arch:sign-off → po:merge → done
 | `board-scanner` | Scan project board for actionable issues |
 | `status-workflow` | Update issue project status |
 | `coderabbit-review` | Run CodeRabbit AI code review |
-| `pr-feedback-monitor` (NEW!) | Monitor and respond to PR comments |
+| `pr-feedback-monitor` | Monitor and respond to PR comments |
+| `monitor-active-prs` | Scan all staging PRs for review feedback |
+| `update-enhancement-doc` | Update design docs after PR merges |
 
 ## Configuration Files
 
@@ -392,9 +400,10 @@ done
 - Code implementation
 - CodeRabbit reviews
 - PR creation
-- PR feedback responses (NEW!)
+- PR feedback responses
 - Test execution
 - Status transitions
+- Enhancement doc updates (after PR merge)
 
 **Human Gates:**
 - Epic approval

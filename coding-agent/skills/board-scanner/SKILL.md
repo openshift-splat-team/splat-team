@@ -125,6 +125,14 @@ Transitions:
 
 - `arch:sign-off` → set status to `po:merge`, comment, log.
 - `po:merge` → set status to `done`, close the issue via `gh issue close`, comment, log.
+  **IMPORTANT:** After marking a story as `done`, update the parent epic's enhancement document:
+  ```bash
+  # For stories only (not epics)
+  if [[ "$ISSUE_TYPE" == "story" ]]; then
+    ralph tools skill load update-enhancement-doc
+    update_enhancement_doc_for_story "$ISSUE_NUM"
+  fi
+  ```
 
 Comment format for auto-advance:
 
