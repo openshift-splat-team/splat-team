@@ -9,7 +9,7 @@ cli:
 
 core:
   guardrails:
-    - "Comply with all invariants in team/invariants/, team/projects/<project>/invariants/, and team/members/superman/invariants/"
+    - "Comply with all invariants in team/invariants/, team/projects/<project>/invariants/, and team/members/superman-atlas/invariants/"
 
 hats:
   po_backlog:
@@ -30,7 +30,7 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
 
       ### Status Transitions
 
@@ -108,7 +108,7 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
 
       ### Status Transitions
 
@@ -216,8 +216,8 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/lead_reviewer/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/lead_reviewer/knowledge/`
 
       ### Status Transitions
 
@@ -276,8 +276,8 @@ hats:
       Reference these when producing designs — consult as needed, not all upfront:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/arch_designer/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/arch_designer/knowledge/`
 
       ### Status Transitions
 
@@ -347,8 +347,8 @@ hats:
       Reference these when producing story breakdowns — consult as needed, not all upfront:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/arch_planner/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/arch_planner/knowledge/`
 
       ### Status Transitions
 
@@ -416,7 +416,7 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
 
       ### Status Transitions
 
@@ -480,7 +480,7 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
 
       ### Status Transitions
 
@@ -524,8 +524,8 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/qe_test_designer/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/qe_test_designer/knowledge/`
 
       ### Status Transitions
 
@@ -572,8 +572,8 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/dev_implementer/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/dev_implementer/knowledge/`
 
       ### Rejection-Awareness
 
@@ -629,8 +629,8 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/dev_code_reviewer/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/dev_code_reviewer/knowledge/`
 
       ### Workflow:
 
@@ -639,7 +639,7 @@ hats:
       3. Check compliance with:
          - Team invariants (`team/invariants/`)
          - Project invariants (`team/projects/<project>/invariants/`)
-         - Member invariants (`team/members/superman/invariants/`)
+         - Member invariants (`team/members/superman-atlas/invariants/`)
          - Code style and patterns
       4. **If approved:**
          - Set the story's project status to `qe:verify` (use the `status-workflow` skill).
@@ -678,8 +678,8 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/qe_verifier/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/qe_verifier/knowledge/`
 
       ### Workflow:
 
@@ -721,7 +721,7 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
 
       ### Workflow:
 
@@ -758,8 +758,8 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/cw_writer/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/cw_writer/knowledge/`
 
       ### Rejection-Awareness
 
@@ -802,8 +802,8 @@ hats:
       Reference as needed:
       - Team: `team/knowledge/`
       - Project: `team/projects/<project>/knowledge/`
-      - Member: `team/members/superman/knowledge/`
-      - Hat: `team/members/superman/hats/cw_reviewer/knowledge/`
+      - Member: `team/members/superman-atlas/knowledge/`
+      - Hat: `team/members/superman-atlas/hats/cw_reviewer/knowledge/`
 
       ### Workflow:
 
@@ -843,7 +843,7 @@ skills:
   dirs:
     - team/coding-agent/skills
     - team/projects/<project>/coding-agent/skills
-    - team/members/superman/coding-agent/skills
+    - team/members/superman-atlas/coding-agent/skills
   overrides:
     board-scanner:
       auto_inject: true

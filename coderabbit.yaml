@@ -1,0 +1,140 @@
+# CodeRabbit Configuration for SPLAT Team
+# This file customizes CodeRabbit AI code reviews for team standards
+
+# Review behavior
+reviews:
+  # Request changes workflow - determines when to auto-request changes
+  request_changes_workflow: true
+
+  # Automatically mark resolved conversations
+  auto_resolve: false
+
+  # Review level: "full" for comprehensive, "quick" for fast feedback
+  level: full
+
+  # Focus areas for review
+  focus:
+    - security
+    - performance
+    - correctness
+    - maintainability
+    - testing
+
+# Language-specific rules
+languages:
+  go:
+    # Go-specific checks
+    - Check for proper error handling (don't ignore errors)
+    - Verify context usage in long-running operations
+    - Flag potential race conditions
+    - Check for proper resource cleanup (defer close)
+    - Verify interface satisfaction
+    - Check for goroutine leaks
+
+  python:
+    # Python-specific checks
+    - Check for exception handling
+    - Verify type hints on public APIs
+    - Flag mutable default arguments
+    - Check for proper resource cleanup (context managers)
+
+  shell:
+    # Shell script checks
+    - Verify proper quoting of variables
+    - Check for set -euo pipefail
+    - Flag unsafe use of eval or unquoted variables
+    - Verify error handling in critical sections
+
+# Security checks
+security:
+  # Always flag these security issues
+  critical:
+    - SQL injection
+    - Command injection
+    - Path traversal
+    - Hardcoded credentials or secrets
+    - Insecure random number generation
+    - Unsafe deserialization
+    - SSRF vulnerabilities
+    - XSS vulnerabilities
+
+  # Warn about these patterns
+  warnings:
+    - Overly permissive file permissions
+    - Missing input validation
+    - Weak cryptography
+    - Insecure HTTP usage (should be HTTPS)
+
+# Performance checks
+performance:
+  - Flag N+1 query patterns
+  - Identify inefficient loops or algorithms
+  - Check for unnecessary allocations
+  - Warn about blocking operations in critical paths
+  - Flag expensive operations in hot paths
+
+# Code quality rules
+quality:
+  # Complexity thresholds
+  complexity:
+    max_cyclomatic: 15
+    max_cognitive: 20
+
+  # Function/method size limits
+  size:
+    max_lines_per_function: 100
+    max_parameters: 5
+
+  # Naming conventions
+  naming:
+    - Functions should be verb phrases
+    - Variables should be nouns
+    - Boolean variables should be predicates (is/has/can)
+    - Constants should be UPPER_SNAKE_CASE
+
+  # Documentation
+  documentation:
+    - Public APIs must have docstrings/comments
+    - Complex algorithms should explain why, not what
+    - TODOs should reference issue numbers
+
+# Testing requirements
+testing:
+  - New code should include tests
+  - Tests should cover happy path and error cases
+  - Integration tests for API changes
+  - Flag untested error handling paths
+  - Warn if test coverage decreases
+
+# Team-specific conventions
+team_standards:
+  # OpenShift-specific
+  - Follow OpenShift operator best practices
+  - Use structured logging (logr/zap)
+  - Proper Kubernetes client-go patterns
+  - Controller-runtime conventions for operators
+
+  # vSphere-specific
+  - Use govmomi best practices
+  - Proper session management
+  - Handle vCenter API rate limiting
+  - Verify vSphere version compatibility
+
+# Files to ignore
+ignore:
+  - "**/*_generated.go"
+  - "**/*.pb.go"
+  - "**/vendor/**"
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "**/zz_generated.*"
+
+# Tone and style
+tone: professional
+style: concise
+
+# Output format (for CLI)
+output:
+  format: structured
+  include_suggestions: true
+  include_line_numbers: true
