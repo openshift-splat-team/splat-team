@@ -131,9 +131,9 @@ else
 
   PR_BODY="## Story
 
-Implements story openshift-splat-team/splat-team#${STORY_NUM}
+**Closes openshift-splat-team/splat-team#${STORY_NUM}**
 
-**${STORY_TITLE}**
+${STORY_TITLE}
 
 ## Implementation
 
