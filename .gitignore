@@ -13,3 +13,6 @@ poll-log.txt
 *.tmp
 *.swp
 *~
+
+# MkDocs build output
+site/
