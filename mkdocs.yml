@@ -1,0 +1,34 @@
+site_name: OpenShift SPLAT Team Documentation
+site_description: Documentation for OpenShift SPLAT Team features and processes
+site_author: OpenShift SPLAT Team
+repo_url: https://github.com/openshift-splat-team/splat-team
+repo_name: openshift-splat-team/splat-team
+
+theme:
+  name: material
+  palette:
+    primary: red
+    accent: red
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - toc.integrate
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: README.md
+  - Features:
+      - vSphere Multi-Account Credentials: features/vsphere-multi-account-credentials.md
+  - Process:
+      - Workflow: PROCESS.md
+      - Human Review Guide: HUMAN-REVIEW-GUIDE.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - pymdownx.details
