@@ -1,13 +1,15 @@
-# Splat Team Philosophy
+# splat Team Philosophy
 
-**Profile:** scrum-compact  
+**Profile:** scrum-compact
 **Last Updated:** 2026-05-01
 
 ---
 
 ## Mission
 
-Build and maintain OpenShift's vSphere/VMware platform integration, ensuring reliable installation, operation, and troubleshooting capabilities for enterprise customers running OpenShift on VMware infrastructure.
+Define your team's mission here. What problem does your team solve? Who are your stakeholders?
+
+*(Edit this section to reflect your team's specific mission and goals)*
 
 ---
 
@@ -57,61 +59,17 @@ Build and maintain OpenShift's vSphere/VMware platform integration, ensuring rel
 
 ---
 
-### 4. OpenShift CI/CD Native
+### 4. Retrieval Over Training Data
 
-**Principle:** Deeply integrated with OpenShift development workflows (Prow, must-gather, Jira).
+**Principle:** Read team documentation before acting, don't rely on pre-training knowledge.
 
-**Why:** We maintain OpenShift operators — must follow upstream conventions and tooling.
-
-**How to Apply:**
-- Use Prow for CI/CD (not GitHub Actions for operator testing)
-- Follow OpenShift enhancement process for design docs
-- Use must-gather for debugging and diagnostics
-- Link work to Jira issues when working on upstream bugs
-
----
-
-### 5. Forked Project Model
-
-**Principle:** Work happens in forked repos under `openshift-splat-team` org.
-
-**Why:** Isolate team work from upstream, enable independent testing, prepare PRs for upstream.
-
-**Workflow:**
-1. Fork upstream OpenShift repo → `openshift-splat-team/<project>`
-2. Work in fork (issues, branches, PRs)
-3. Test in fork's Prow environment
-4. Submit PR to upstream when ready
-
-**See:** `architecture/projects.md` for active forks.
-
----
-
-### 6. Test-First vSphere Focus
-
-**Principle:** All changes must include vSphere-specific tests and validation.
-
-**Why:** vSphere platform has unique failure modes — can't rely solely on generic tests.
+**Why:** Team-specific processes and conventions may differ from general best practices.
 
 **How to Apply:**
-- Add vSphere e2e tests for new features
-- Test against real vSphere environments (not just mocks)
-- Include must-gather diagnostics for debugging
-- Validate upgrade paths (N → N+1)
-
----
-
-### 7. Continuous Documentation
-
-**Principle:** Document as you build — design docs, ADRs, code comments, user guides.
-
-**Why:** Complex platform integration requires clear documentation for troubleshooting and knowledge transfer.
-
-**Artifacts:**
-- Design docs (in epics, linked from `lead:design-review` status)
-- ADRs for architectural decisions (`ai-docs/decisions/`)
-- MkDocs for user-facing guides (`docs/`)
-- Code comments for non-obvious vSphere behavior
+- Check `ai-docs/` before making process assumptions
+- Verify status transitions in `ai-docs/statuses/index.md`
+- Read `PROCESS.md` for workflow guidance
+- Reference role responsibilities in `ai-docs/roles/index.md`
 
 ---
 
@@ -151,14 +109,11 @@ Build and maintain OpenShift's vSphere/VMware platform integration, ensuring rel
 ❌ **Merging without human PR review**
 - `dev:code-review` requires human approval (blocking)
 
-❌ **Generic tests for vSphere features**
-- Always include vSphere-specific validation
+❌ **Ignoring team documentation**
+- Always read relevant ai-docs before making assumptions
 
-❌ **Working directly in upstream repos**
-- Use forked repos under `openshift-splat-team/`
-
-❌ **Forgetting must-gather updates**
-- New features need must-gather collection logic
+❌ **Advancing status without completing work**
+- Status transitions must reflect actual work state
 
 ---
 
@@ -182,7 +137,7 @@ Build and maintain OpenShift's vSphere/VMware platform integration, ensuring rel
 - Architectural pivots
 - Breaking changes
 - Security implications
-- Upstream policy changes
+- Major process changes
 
 ---
 
@@ -193,14 +148,15 @@ Build and maintain OpenShift's vSphere/VMware platform integration, ensuring rel
 - Sustainable pace, not maximum throughput
 
 **Quality:**
-- Zero regressions in vSphere e2e tests
-- All PRs pass upstream CI before submission
+- All PRs pass CI before submission
 - Design docs reviewed within 1 business day
 
 **Responsiveness:**
 - Regressions triaged within 4 hours
 - Blockers escalated within 1 business day
 - PR reviews completed within 2 business days
+
+*(Adjust these metrics based on your team's context and capacity)*
 
 ---
 
@@ -214,8 +170,24 @@ Build and maintain OpenShift's vSphere/VMware platform integration, ensuring rel
 
 ---
 
+## Role Definitions
+
+- **superman**: All-in-one member — PO, architect, dev, QE, SRE, content writer
+- **team-manager**: Process improvement and team coordination
+
+See `ai-docs/roles/index.md` for detailed hat-switching guide.
+
+---
+
+## Status Workflow
+
+No statuses defined
+
+See `ai-docs/statuses/index.md` for full state machine and transition rules.
+
+---
+
 **See Also:**
 - [Sprint Process](workflows/sprint-process.md) - Ceremonies and cadence
-- [Epic Breakdown](workflows/epic-breakdown.md) - Design → Stories details
-- [Status Transitions](statuses/transitions.md) - Full state machine
-- [Role Responsibilities](roles/responsibilities.md) - Hat-switching guide
+- [Status Transitions](statuses/index.md) - Full state machine
+- [Role Responsibilities](roles/index.md) - Hat-switching guide
