@@ -560,14 +560,21 @@ hats:
       1. Read the story issue via `gh issue view <number> --repo "$TEAM_REPO" --json number,title,body,labels,state,comments`.
       2. Read the parent epic's design doc for architectural context.
       3. Read the story's acceptance criteria (Given-When-Then from breakdown).
-      4. For bugs: reproduce the issue first, document reproduction steps.
-      5. Produce a test plan as a comment on the story issue:
-         - What to test (scenarios from acceptance criteria)
-         - How to test (test approach, tools)
+      4. **Reference Agentic PR Review Checklist** — Read `team/knowledge/agentic-pr-review-checklist.md` Section 3 (Test Review) and Section 4 (Risk Surface Coverage) to inform test design:
+         - Ensure test independence (tests describable without implementation)
+         - Design for idempotency (unit tests REQUIRED, E2E documented)
+         - Include adversarial cases (empty input, boundaries, concurrent access, failure paths)
+         - Plan risk surface coverage (auth boundaries, error paths, boundary values, concurrency, data lifecycle)
+         - Address Go-specific patterns (defer, goroutines, maps with concurrency, error handling)
+      5. For bugs: reproduce the issue first, document reproduction steps.
+      6. Produce a test plan as a comment on the story issue:
+         - What to test (scenarios from acceptance criteria + adversarial cases)
+         - How to test (test approach, tools, idempotency requirements)
          - Expected results
-      6. Write test stubs/skeletons in the project repo (`./`) if applicable.
-      7. Set the story's project status to `dev:implement` via item-edit.
-      8. Publish `dev.implement` (direct chain to dev_implementer).
+         - Risk surface coverage assessment
+      7. Write test stubs/skeletons in the project repo (`./`) if applicable.
+      8. Set the story's project status to `dev:implement` via item-edit.
+      9. Publish `dev.implement` (direct chain to dev_implementer).
 
       ### Comment Format
       Use `### 🧪 qe — <ISO-timestamp>` for all comments.
@@ -661,18 +668,24 @@ hats:
 
       1. Read the story issue via `gh issue view <number> --repo "$TEAM_REPO" --json number,title,body,labels,state,comments`.
       2. Review the implementation changes (git diff, read modified files).
-      3. Check compliance with:
+      3. **Apply Agentic PR Review Checklist** — Read and apply `team/knowledge/agentic-pr-review-checklist.md`:
+         - Complete Pre-Review Gate (Section 1)
+         - Code Review checklist (Section 2) — surface at least 3 assumptions
+         - Test Review checklist (Section 3) — verify test independence and idempotency
+         - Risk Surface Coverage (Section 4)
+         - Scan for Go-specific red flags (Appendix)
+      4. Check compliance with:
          - Team invariants (`team/invariants/`)
          - Project invariants (`team/projects/<project>/invariants/`)
          - Member invariants (`team/members/superman-atlas/invariants/`)
          - Code style and patterns
-      4. **If approved:**
+      5. **If approved:**
          - Set the story's project status to `qe:verify` (use the `status-workflow` skill).
-         - Append approval comment via `gh issue comment`.
+         - Append approval comment via `gh issue comment` using the Reviewer Notes Template from the checklist.
          - Publish `dev.approved` (direct chain to qe_verifier).
-      5. **If rejected:**
+      6. **If rejected:**
          - Set the story's project status to `dev:implement` via item-edit.
-         - Append detailed feedback comment via `gh issue comment`.
+         - Append detailed feedback comment via `gh issue comment` citing specific checklist violations.
          - Publish `dev.rejected` (routes to dev_implementer).
 
       ### Comment Format
@@ -711,15 +724,20 @@ hats:
       1. Read the story issue via `gh issue view <number> --repo "$TEAM_REPO" --json number,title,body,labels,state,comments`.
       2. Read the test plan comment (from QE test designer).
       3. Run tests, check coverage.
-      4. Verify the implementation against each acceptance criterion.
-      5. **If verification passes:**
+      4. **Apply Agentic PR Review Checklist** — Read and apply `team/knowledge/agentic-pr-review-checklist.md`:
+         - Test Review (Section 3) — verify test independence, idempotency, and adversarial coverage
+         - Run "The Delete Test" — mentally remove 2 tests and verify regression detection
+         - Risk Surface Coverage (Section 4) — verify auth boundaries, failure paths, boundary values, concurrency, data lifecycle
+         - Check Go-specific red flags (Appendix)
+      5. Verify the implementation against each acceptance criterion.
+      6. **If verification passes:**
          - Set the story's project status to `arch:sign-off` (use the `status-workflow` skill).
            (Board scanner will auto-advance: `arch:sign-off` → `po:merge` → `done`.)
-         - Append verification report comment via `gh issue comment`.
+         - Append verification report comment via `gh issue comment` including test quality assessment.
          - Publish `qe.approved`.
-      6. **If verification fails:**
+      7. **If verification fails:**
          - Set the story's project status to `dev:implement` via item-edit.
-         - Append detailed feedback comment via `gh issue comment`.
+         - Append detailed feedback comment via `gh issue comment` citing specific test quality issues or acceptance criteria failures.
          - Publish `qe.rejected` (routes to dev_implementer).
 
       ### Comment Format
