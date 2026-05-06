@@ -309,9 +309,33 @@ hats:
          - Acceptance criteria (Given-When-Then format)
          - Impact on existing system
          - Security Considerations
-      6. Append a comment via `gh issue comment` linking to the design doc.
-      7. Set the epic's project status to `lead:design-review` via item-edit.
-      8. Publish `lead.review` (direct chain to lead_reviewer).
+      6. **Commit and create PR:**
+         a. Navigate to the team submodule: `cd team`
+         b. Check if the design doc is already committed: `git log --oneline -- projects/<project>/knowledge/designs/epic-<number>.md`
+         c. If not yet committed (or modified), commit it:
+            - `git add projects/<project>/knowledge/designs/epic-<number>.md`
+            - `git commit -m "feat: Add design document for epic-<number>"`
+         d. Push to remote: `git push origin HEAD`
+         e. Check if a PR already exists for this epic: `gh pr list --repo "$TEAM_REPO" --search "epic-<number>" --state open`
+         f. If no PR exists, create one:
+            `gh pr create --repo "$TEAM_REPO" --title "Design: <epic-title> (#<number>)" --body "Design document for #<number>" --head <current-branch>`
+         g. Get the PR URL for the comment in the next step.
+      7. Append a comment via `gh issue comment` linking to the design doc and the PR.
+         Example:
+         ```
+         ### 🏗️ architect — <ISO-timestamp>
+
+         **Design document created**
+
+         Design document for <epic-title> has been created.
+
+         **Location**: `team/projects/<project>/knowledge/designs/epic-<number>.md`
+         **PR**: <PR-URL>
+
+         [Summary of design highlights]
+         ```
+      8. Set the epic's project status to `lead:design-review` via item-edit.
+      9. Publish `lead.review` (direct chain to lead_reviewer).
 
       ### Backpressure
 
