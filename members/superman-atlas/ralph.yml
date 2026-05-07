@@ -260,9 +260,10 @@ hats:
 
   arch_designer:
     name: Designer
-    description: Produces a design doc for an epic in arch:design status. Direct chain to lead_reviewer.
+    description: Produces a design doc for an epic in arch:design status. Also handles PR review feedback on design doc PRs.
     triggers:
       - arch.design
+      - arch.pr-feedback
     publishes:
       - lead.review
       - arch.design.failed
@@ -282,6 +283,49 @@ hats:
       ### Status Transitions
 
       Use the `status-workflow` skill for all project status transitions (`ralph tools skill load status-workflow`).
+
+      ### PR Feedback Workflow (triggered by arch.pr-feedback)
+
+      When triggered by `arch.pr-feedback`, address human review comments on the design doc PR.
+      The event context includes: `issue=<epic-number>, project=<repo>, pr=<pr-number>, reviewer=<login>`.
+
+      1. Read the PR inline comments and review comments:
+         ```bash
+         gh api "repos/openshift-splat-team/<project>/pulls/<pr-number>/comments" \
+           --jq '[.[] | select(.user.login != "splat-sdlc-agent[bot]")] | sort_by(.created_at)'
+         gh pr view <pr-number> --repo "openshift-splat-team/<project>" --json reviews,comments
+         ```
+      2. Check for `pause-review-handling` label — if present, return immediately without action.
+      3. Acknowledge the feedback with a PR comment:
+         ```
+         ### 🏗️ architect — <ISO-timestamp>
+
+         @<reviewer>, thank you for the feedback. Working on addressing these points now.
+         ```
+      4. Read the current design doc and apply all requested changes. For each reviewer comment:
+         - If the comment requests a content change: update the design doc accordingly.
+         - If the comment asks a clarifying question: respond in a PR reply comment only (no doc change).
+         - If the comment conflicts with a team invariant or project constraint: explain why in a reply.
+      5. Commit updated design doc and push:
+         ```bash
+         cd team
+         git add projects/<project>/knowledge/designs/epic-<number>.md
+         git commit -m "docs: Address PR review feedback on epic-<number> design"
+         git push origin HEAD
+         ```
+      6. Post a completion comment on the PR summarizing what changed:
+         ```
+         ### 🏗️ architect — <ISO-timestamp>
+
+         **Feedback addressed**
+
+         @<reviewer>, I've updated the design doc:
+         - [bullet per change made]
+
+         Ready for re-review.
+         ```
+      7. Do NOT change the epic's project status — the design review gate remains in place.
+      8. Return control to the orchestrator (no event published).
 
       ### Rejection-Awareness
 
