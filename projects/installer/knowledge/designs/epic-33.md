@@ -22,10 +22,10 @@ Current OpenShift deployments on vSphere utilize one vCenter account across all 
 ## Goals
 
 1. **Privilege Separation**: Enable separate provisioning vs operational credentials for:
-   - Machine API
+   - Machine API (including Cluster API)
    - Storage (CSI Driver)
    - Cloud Controller
-   - Diagnostics
+   - Diagnostics (vSphere Problem Detector)
 
 2. **Auditability**: Enable distinction between installer vs in-cluster operator actions in vCenter audit logs
 
@@ -86,22 +86,25 @@ platform:
 
 **Option B: ~/.vsphere/credentials File**
 
-INI-style credentials file supporting per-vCenter, per-component configuration:
+YAML credentials file supporting per-vCenter, per-component configuration:
 
-\`\`\`ini
-[vcenter1.example.com]
-user = admin@vsphere.local
-password = admin-password
-machine-api.user = ocp-machine-api@vsphere.local
-machine-api.password = machine-api-password
-csi.user = ocp-csi@vsphere.local
-csi.password = csi-password
+\`\`\`yaml
+vcenters:
+  vcenter1.example.com:
+    user: admin@vsphere.local
+    password: admin-password
+    componentCredentials:
+      machineAPI:
+        user: ocp-machine-api@vsphere.local
+        password: machine-api-password
+      csiDriver:
+        user: ocp-csi@vsphere.local
+        password: csi-password
 \`\`\`
 
 **Security Constraints**:
 - File permissions: 0600 (owner-only access) — installer validates and refuses overly permissive files
 - Directory isolation: \`.vsphere/\` directory should have 0700 permissions
-- Environment override: \`VSPHERE_CREDENTIALS_FILE\` enables pipeline-managed credentials
 - Precedence: install-config.yaml credentials take priority over credentials file
 
 #### 2. Cloud Credential Operator (CCO)
@@ -365,7 +368,7 @@ The `cloudcredential.openshift.io/vsphere-component` annotation value aligns wit
 
 ## Success Metrics
 
-- Successful deployment with per-component credentials on vSphere 7.0+
+- Successful deployment with per-component credentials on vSphere 8.0 Update 1+
 - Audit logs showing per-component action attribution
 - Independent credential rotation for individual components
 - Zero compliance violations for SOC2/PCI-DSS separation of duties
