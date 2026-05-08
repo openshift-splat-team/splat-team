@@ -126,7 +126,8 @@ hats:
          - If the comment contains `rejected` or `changes requested` (case-insensitive) → **rejection**
            (use the rest of the comment as feedback)
          - If no human comment found → send a non-blocking `ralph tools interact progress`
-           notification (if RObot is enabled), then **return control**. NEVER auto-approve.
+           notification (if RObot is enabled), then **return control (emit LOOP_COMPLETE —
+           do NOT publish po.review.failed)**. NEVER auto-approve.
 
       ### For `po:design-review`:
       **Review request comment** (if not already present):
@@ -193,8 +194,10 @@ hats:
       Use `### 📝 po — <ISO-timestamp>` for all comments.
 
       ### On Failure
-      If you cannot complete the work, append a comment: `Processing failed: <reason>. Attempt N/3.`
-      Publish `po.review.failed` — the coordinator will re-scan on the next cycle.
+      Only publish `po.review.failed` for genuine technical failures (GitHub unreachable,
+      API error, permission denied). Do NOT publish it when no human response is found —
+      that is the expected non-blocking state; emit LOOP_COMPLETE instead.
+      For genuine failures: log the error and publish `po.review.failed`.
 
   lead_reviewer:
     name: Team Lead Reviewer
