@@ -89,11 +89,12 @@ hats:
 
   po_reviewer:
     name: Review Gater
-    description: Handles po review gates — checks for human approval/rejection via GitHub issue comments. Non-blocking.
+    description: Handles po review gates — checks for human approval/rejection via GitHub issue comments. Also detects unaddressed PR review comments and routes them to the appropriate hat.
     triggers:
       - po.review
     publishes:
       - po.review.failed
+      - arch.pr-feedback
     instructions: |
       ## Review Gater (GitHub Comment-Based Supervised Mode)
 
@@ -125,9 +126,31 @@ hats:
          - If the comment contains `approved` or `lgtm` (case-insensitive) → **approval**
          - If the comment contains `rejected` or `changes requested` (case-insensitive) → **rejection**
            (use the rest of the comment as feedback)
-         - If no human comment found → send a non-blocking `ralph tools interact progress`
-           notification (if RObot is enabled), then **return control (emit LOOP_COMPLETE —
-           do NOT publish po.review.failed)**. NEVER auto-approve.
+         - If no human comment found → proceed to step 5 (PR feedback check) before returning.
+
+      5. **PR feedback check (po:design-review only):** When no human issue response is found,
+         scan the linked design-doc PR for unaddressed review comments from non-bot users.
+         a. Find the PR linked to this epic: scan the issue's comments for a `🏗️ architect`
+            comment containing a PR URL (e.g. `https://github.com/openshift-splat-team/splat-team/pull/N`).
+         b. If a PR is found, check for unaddressed inline review comments:
+            ```bash
+            gh api repos/openshift-splat-team/splat-team/pulls/<pr>/comments \
+              --jq '[.[] | select(.user.login | endswith("[bot]") | not)] | length'
+            ```
+            Also check for review-level comments:
+            ```bash
+            gh pr view <pr> --repo openshift-splat-team/splat-team \
+              --json reviews --jq '[.reviews[] | select(.state == "CHANGES_REQUESTED")] | length'
+            ```
+         c. Check if already acknowledged: look for a bot PR comment containing "Feedback Acknowledged"
+            or "Working on" posted AFTER the most recent reviewer comment.
+         d. If unaddressed feedback exists (and no `pause-review-handling` label on the PR):
+            - Publish `arch.pr-feedback` with context:
+              `issue=<epic-number>, project=splat-team, pr=<pr-number>, reviewer=<login>`
+            - Return after publishing (do not also emit LOOP_COMPLETE).
+         e. If no unaddressed PR feedback → send a non-blocking `ralph tools interact progress`
+            notification (if RObot is enabled), then **return control (emit LOOP_COMPLETE —
+            do NOT publish po.review.failed)**. NEVER auto-approve.
 
       ### For `po:design-review`:
       **Review request comment** (if not already present):
