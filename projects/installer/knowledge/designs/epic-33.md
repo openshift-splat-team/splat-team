@@ -131,12 +131,12 @@ Analysis across OpenShift repositories identified distinct privilege subsets:
 | Component | Privilege Count | Scope | Examples |
 |-----------|-----------------|-------|----------|
 | Installer | 45 | Full operational set | All provisioning + operational privileges |
-| Machine API | 21 | VM lifecycle | VirtualMachine.Config.*, VirtualMachine.Interact.* |
+| Machine API | 19 | VM lifecycle | VirtualMachine.Config.*, VirtualMachine.Interact.* |
 | CSI Driver | 6 | Storage operations | Datastore.*, VirtualMachine.Config.AddNewDisk |
 | Cloud Controller | 3 | Discovery + LB provisioning | Read permissions + LB VM inventory |
 | Diagnostics | 2 | Read-only monitoring | Sessions.ValidateSession, System.Read |
 
-**Machine API Detailed Privileges** (21 required):
+**Machine API Detailed Privileges** (19 required):
 - Sessions.ValidateSession
 - VirtualMachine.Config.AddNewDisk, AddRemoveDevice, AdvancedConfig, Annotation, CPUCount, Memory, Settings
 - VirtualMachine.Interact.PowerOn, PowerOff, Reset
@@ -230,6 +230,19 @@ spec:
     name: vsphere-cloud-credentials
     namespace: openshift-machine-api
 \`\`\`
+
+#### CredentialsRequest CR Annotation Mapping
+
+Each vSphere component ships a `CredentialsRequest` CR that CCO uses to provision credentials. This enhancement adds a new annotation (`cloudcredential.openshift.io/vsphere-component`) to each CR, giving CCO an explicit hint for which per-component credential (from `install-config.yaml` or the credentials file) to provision into the component's secret.
+
+| Component | Repository | CR Name | `capability.openshift.io/name` | Proposed Component Annotation | Secret Name | Secret Namespace |
+|-----------|-----------|---------|--------------------------------|-------------------------------|-------------|-----------------|
+| Machine API | `openshift/machine-api-operator` | `openshift-machine-api-vsphere` | `MachineAPI+CloudCredential` | `vsphere-component: machineAPI` | `vsphere-cloud-credentials` | `openshift-machine-api` |
+| CSI Driver | `openshift/cluster-storage-operator` | `openshift-vmware-vsphere-csi-driver-operator` | `Storage+CloudCredential` | `vsphere-component: csiDriver` | `vmware-vsphere-cloud-credentials` | `openshift-cluster-csi-drivers` |
+| Cloud Controller | `openshift/cluster-cloud-controller-manager-operator` | `openshift-vsphere-cloud-controller-manager` | `CloudCredential+CloudControllerManager` | `vsphere-component: cloudController` | `vsphere-cloud-credentials` | `openshift-cloud-controller-manager` |
+| Diagnostics | `openshift/cluster-storage-operator` | `openshift-vsphere-problem-detector` | `Storage+CloudCredential` | `vsphere-component: diagnostics` | `vsphere-cloud-credentials` | `openshift-cluster-storage-operator` |
+
+The `cloudcredential.openshift.io/vsphere-component` annotation value aligns with the `componentCredentials` keys in `install-config.yaml` (`machineAPI`, `csiDriver`, `cloudController`, `diagnostics`). When CCO processes a CredentialsRequest with this annotation and per-component credentials are configured, it routes the matching credential to the component's secret. If the annotation is absent or the component key has no per-component credential, CCO falls back to the shared credential.
 
 ### Error Handling
 
