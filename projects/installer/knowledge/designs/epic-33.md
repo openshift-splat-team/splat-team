@@ -27,17 +27,16 @@ Current OpenShift deployments on vSphere utilize one vCenter account across all 
    - Cloud Controller
    - Diagnostics
 
-2. **Migration Path**: Support zero-downtime migration from single-account to multi-account configuration for existing clusters
+2. **Auditability**: Enable distinction between installer vs in-cluster operator actions in vCenter audit logs
 
-3. **Auditability**: Enable distinction between installer vs in-cluster operator actions in vCenter audit logs
-
-4. **Compliance**: Achieve SOC2 separation of duties, PCI-DSS least privilege, and FedRAMP audit logging requirements
+3. **Compliance**: Achieve SOC2 separation of duties, PCI-DSS least privilege, and FedRAMP audit logging requirements
 
 ## Non-Goals
 
 - Automatic vCenter account creation (mint mode) — conflicts with enterprise security practices
 - External identity provider integration — valuable future enhancement but out of scope
 - Cross-cluster credential sharing
+- Migration from single-account to multi-account configuration for existing clusters
 
 ## Architecture
 
@@ -131,11 +130,11 @@ Analysis across OpenShift repositories identified distinct privilege subsets:
 
 | Component | Privilege Count | Scope | Examples |
 |-----------|-----------------|-------|----------|
-| Installer | ~45 | Full operational set | All provisioning + operational privileges |
-| Machine API | ~35 | VM lifecycle | VirtualMachine.Config.*, VirtualMachine.Interact.* |
-| CSI Driver | ~10-15 | Storage operations | Datastore.*, VirtualMachine.Config.AddNewDisk |
-| Cloud Controller | ~10 | Read-only discovery | Read permissions on vCenter objects |
-| Diagnostics | ~5 | Read-only monitoring | Sessions.ValidateSession, System.Read |
+| Installer | 45 | Full operational set | All provisioning + operational privileges |
+| Machine API | 21 | VM lifecycle | VirtualMachine.Config.*, VirtualMachine.Interact.* |
+| CSI Driver | 6 | Storage operations | Datastore.*, VirtualMachine.Config.AddNewDisk |
+| Cloud Controller | 3 | Discovery + LB provisioning | Read permissions + LB VM inventory |
+| Diagnostics | 2 | Read-only monitoring | Sessions.ValidateSession, System.Read |
 
 **Machine API Detailed Privileges** (21 required):
 - Sessions.ValidateSession
@@ -202,10 +201,10 @@ const (
 )
 
 type VSphereComponentCredentials struct {
-  MachineAPI       *VSphereCredential
-  CSIDriver        *VSphereCredential
-  CloudController  *VSphereCredential
-  Diagnostics      *VSphereCredential
+  MachineAPI *VSphereCredential
+  CSIDriver *VSphereCredential
+  CloudController *VSphereCredential
+  Diagnostics *VSphereCredential
 }
 \`\`\`
 
@@ -291,16 +290,7 @@ spec:
 - Installation succeeds with component-specific secrets created in appropriate namespaces
 - vCenter audit logs show distinct service accounts for installer, machine-api, csi, cloud-controller, diagnostics actions
 
-### AC2: Existing Cluster Migration to Per-Component Credentials
-
-**Given**: An existing vSphere IPI cluster in Passthrough mode  
-**When**: Administrator creates component accounts, creates secrets, and sets Infrastructure CR to PerComponent mode  
-**Then**:
-- CCO validates all component credentials
-- Components switch to per-component credentials without downtime
-- All workloads remain operational during and after transition
-
-### AC3: Validation Failure Reporting
+### AC2: Validation Failure Reporting
 
 **Given**: Administrator provides credentials missing required privileges  
 **When**: CCO validates credentials during installation or secret update  
@@ -309,7 +299,7 @@ spec:
 - Error message specifies: account name, vCenter FQDN, and list of missing privileges
 - Installation blocks until privileges are granted
 
-### AC4: Multi-vCenter Credential Support
+### AC3: Multi-vCenter Credential Support
 
 **Given**: Cluster spanning multiple vCenters (vcenter1.example.com, vcenter2.example.com)  
 **When**: Per-component credentials provided for each vCenter  
@@ -318,7 +308,7 @@ spec:
 - Component secrets contain separate credentials keyed by vCenter FQDN
 - Components can perform operations on resources in both vCenters
 
-### AC5: Graceful Degradation
+### AC4: Graceful Degradation
 
 **Given**: Administrator provides per-component credentials for machine-api and csi only  
 **When**: CCO provisions credentials  
@@ -327,7 +317,7 @@ spec:
 - cloud-controller and diagnostics fall back to shared credentials
 - Warning logged for components using fallback
 
-### AC6: Credential Rotation
+### AC5: Credential Rotation
 
 **Given**: Cluster in PerComponent mode  
 **When**: Administrator rotates machine-api credentials by updating secret  
@@ -337,7 +327,7 @@ spec:
 - Other components unaffected
 - No cluster downtime during rotation
 
-### AC7: Documentation and Tooling
+### AC6: Documentation and Tooling
 
 **Given**: Administrator needs to configure per-component credentials  
 **When**: Following official documentation  
@@ -353,36 +343,6 @@ spec:
 - Existing Passthrough mode clusters continue functioning unchanged
 - No forced migration required
 - API extensions purely additive
-
-**Migration Path** (Passthrough → PerComponent):
-
-1. **Pre-migration**:
-   - Create vCenter roles using provided scripts
-   - Create service accounts in vCenter SSO
-   - Assign roles to accounts on cluster datacenter/cluster
-
-2. **Configuration**:
-   - Create component-specific secrets in appropriate namespaces
-   - Update Infrastructure CR: set \`credentialsMode: PerComponent\`
-
-3. **Validation**:
-   - CCO validates credentials on all vCenters
-   - Monitor \`CredentialsRequest\` conditions for validation status
-   - Fix any reported privilege gaps
-
-4. **Zero-downtime transition**:
-   - Components gracefully switch to new credentials
-   - No service interruption during credential swap
-   - Old credentials can be decommissioned after verification
-
-**Rollback Path** (PerComponent → Passthrough):
-
-\`\`\`bash
-oc patch infrastructure cluster --type=merge -p \
-  '{"spec":{"platformSpec":{"vsphere":{"credentialsMode":"Passthrough"}}}}'
-\`\`\`
-
-Components revert to shared credentials from \`vsphere-cloud-credentials\` secret in \`kube-system\`.
 
 ## References
 
