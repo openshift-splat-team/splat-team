@@ -9,7 +9,7 @@ approvers:
 api-approvers:
   - None
 creation-date: 2026-04-21
-last-updated: 2026-04-21
+last-updated: 2026-05-08
 status: provisional
 tracking-link:
   - https://github.com/openshift-splat-team/splat-team/issues/14
@@ -59,9 +59,9 @@ This shared credential model creates critical security and compliance issues:
    - **Machine API Operator**: VM lifecycle management (35 privileges)
    - **CSI Driver**: Storage operations (10-15 privileges)
    - **Cloud Controller Manager**: Read-only node discovery (~10 privileges, requires verification)
-   - **vSphere Problem Detector**: Configuration validation and health monitoring (~16 privileges: 11 vCenter-level for tagging/CNS/sessions, 1 datacenter for System.Read, 4 datastore for read-only checks)
+   - **vSphere Problem Detector (vsphere-problem-detector)**: Configuration validation and health monitoring — requires the same privileges as the shared credential it validates (11 vCenter-level tagging/CNS/session, 4 cluster-level, 1 portgroup, 28 folder-level, 1 datacenter, 4 datastore, 4 resource pool; see `pkg/check/permissions.go` in openshift/vsphere-problem-detector)
 
-2. **Migration path**: Support zero-downtime migration of existing single-credential clusters to multi-credential model
+2. **Migration path**: Support migration of existing single-credential clusters to multi-credential model
 
 3. **Auditability**: Enable vCenter audit logs to distinguish installer vs in-cluster operator actions via credential-based attribution
 
@@ -94,7 +94,7 @@ This shared credential model creates critical security and compliance issues:
      --cluster Cluster1
    
    # Creates roles: openshift-installer, openshift-machine-api, 
-   # openshift-storage, openshift-cloud-controller, openshift-diagnostics
+   # openshift-storage, openshift-cloud-controller, openshift-vsphere-problem-detector
    ```
 
 2. **Configure install-config.yaml**:
@@ -122,10 +122,10 @@ This shared credential model creates critical security and compliance issues:
            secretRef:
              name: vsphere-cloud-controller-creds
              namespace: openshift-cloud-controller-manager
-         diagnostics:
+         vsphereProblemDetector:
            secretRef:
-             name: vsphere-diagnostics-creds
-             namespace: openshift-config
+             name: vsphere-problem-detector-creds
+             namespace: kube-system
    ```
 
 3. **Run installation**:
@@ -163,9 +163,9 @@ This shared credential model creates critical security and compliance issues:
    - Reads `vsphere-cloud-controller-creds` secret in openshift-cloud-controller-manager namespace
    - Uses read-only credentials for node discovery
 
-5. **vSphere Problem Detector**:
-   - Reads `vsphere-diagnostics-creds` secret in openshift-config namespace
-   - Uses read-only credentials for configuration validation and health monitoring
+5. **vSphere Problem Detector (vsphere-problem-detector)**:
+   - Reads `vsphere-problem-detector-creds` secret in openshift-cluster-storage-operator namespace (provisioned by CCO from kube-system source)
+   - Validates that the provided credential has the required privileges for cluster health monitoring
 
 #### Migration Workflow (Existing Cluster)
 
@@ -180,7 +180,7 @@ This shared credential model creates critical security and compliance issues:
      --from-literal=vcenter.example.com.username=machine-api@vsphere.local \
      --from-literal=vcenter.example.com.password='...'
    
-   # Repeat for storage, cloud-controller, diagnostics
+   # Repeat for storage, cloud-controller, vsphere-problem-detector
    ```
 
 3. **CCO detects and provisions credentials**:
@@ -241,10 +241,10 @@ spec:
           secretRef:
             name: vsphere-cloud-controller-creds
             namespace: openshift-cloud-controller-manager
-        diagnostics:
+        vsphereProblemDetector:
           secretRef:
-            name: vsphere-diagnostics-creds
-            namespace: openshift-config
+            name: vsphere-problem-detector-creds
+            namespace: kube-system
 ```
 
 #### Secret Format
@@ -313,8 +313,8 @@ platform:
       cloudController:
         username: "cloud-controller@vsphere.local"
         password: "..."
-      diagnostics:
-        username: "diagnostics@vsphere.local"
+      vsphereProblemDetector:
+        username: "vsphere-problem-detector@vsphere.local"
         password: "..."
 ```
 
@@ -335,8 +335,8 @@ vcenters:
     cloud_controller:
       username: cloud-controller@vsphere.local
       password: ...
-    diagnostics:
-      username: diagnostics@vsphere.local
+    vsphere_problem_detector:
+      username: vsphere-problem-detector@vsphere.local
       password: ...
   
   vcenter2.example.com:
@@ -354,7 +354,7 @@ vcenters:
 
 **Standard IPI deployment:**
 - Full credential set required (installer + all runtime components)
-- Installer credentials used during installation, not persisted in cluster
+- Installer credentials used during installation and persisted in vsphere-cloud-credentials (may be removed in a future enhancement)
 - Runtime credentials distributed to operator namespaces
 - Migration path from single credential to per-component supported
 
@@ -412,11 +412,19 @@ vcenters:
 - System.View (view objects)
 - VirtualMachine.Inventory.Create (for node providerID reconciliation)
 
-**Diagnostics (~5 privileges - read-only):**
-- System.Anonymous
-- System.Read
-- System.View
-- Datastore.Browse (read logs from datastore)
+**vSphere Problem Detector (vsphere-problem-detector) — same privilege set as shared credential it validates:**
+
+Based on review of `pkg/check/permissions.go` in openshift/vsphere-problem-detector, the credential requires:
+
+- vCenter level (11): `Cns.Searchable`, `InventoryService.Tagging.AttachTag`, `InventoryService.Tagging.CreateCategory`, `InventoryService.Tagging.CreateTag`, `InventoryService.Tagging.DeleteCategory`, `InventoryService.Tagging.DeleteTag`, `InventoryService.Tagging.EditCategory`, `InventoryService.Tagging.EditTag`, `Sessions.ValidateSession`, `StorageProfile.Update`, `StorageProfile.View`
+- Cluster level (4): `Resource.AssignVMToPool`, `VApp.AssignResourcePool`, `VApp.Import`, `VirtualMachine.Config.AddNewDisk`
+- Portgroup level (1): `Network.Assign`
+- Folder level (28): `Resource.AssignVMToPool`, `VApp.Import`, `VirtualMachine.Config.AddExistingDisk`, `VirtualMachine.Config.AddNewDisk`, `VirtualMachine.Config.AddRemoveDevice`, `VirtualMachine.Config.AdvancedConfig`, `VirtualMachine.Config.Annotation`, `VirtualMachine.Config.CPUCount`, `VirtualMachine.Config.DiskExtend`, `VirtualMachine.Config.DiskLease`, `VirtualMachine.Config.EditDevice`, `VirtualMachine.Config.Memory`, `VirtualMachine.Config.RemoveDisk`, `VirtualMachine.Config.Rename`, `VirtualMachine.Config.ResetGuestInfo`, `VirtualMachine.Config.Resource`, `VirtualMachine.Config.Settings`, `VirtualMachine.Config.UpgradeVirtualHardware`, `VirtualMachine.Interact.GuestControl`, `VirtualMachine.Interact.PowerOff`, `VirtualMachine.Interact.PowerOn`, `VirtualMachine.Interact.Reset`, `VirtualMachine.Inventory.Create`, `VirtualMachine.Inventory.CreateFromExisting`, `VirtualMachine.Inventory.Delete`, `VirtualMachine.Provisioning.Clone`, `VirtualMachine.Provisioning.MarkAsTemplate`, `VirtualMachine.Provisioning.DeployTemplate`
+- Datacenter level (1): `System.Read`
+- Datastore level (4): `Datastore.AllocateSpace`, `Datastore.Browse`, `Datastore.FileManagement`, `InventoryService.Tagging.ObjectAttachable`
+- Resource pool level (4): `Resource.AssignVMToPool`, `VApp.AssignResourcePool`, `VApp.Import`, `VirtualMachine.Config.AddNewDisk`
+
+**Note**: The vsphere-problem-detector validates that its own credential has these privileges using `FetchUserPrivilegeOnEntities`. All documented privileges are still required post-install — this feature ensures each component has properly scoped credentials, not that any privileges are removed.
 
 #### Privilege Validation Logic
 
@@ -438,7 +446,7 @@ func ValidateComponentCredentials(vcenters []VCenter, credentials ComponentCrede
             return fmt.Errorf("machine-api credentials for %s: %w", vcenter.Server, err)
         }
         
-        // ... repeat for storage, cloudController, diagnostics
+        // ... repeat for storage, cloudController, vsphereProblemDetector
     }
     return nil
 }
@@ -447,20 +455,25 @@ func ValidateComponentCredentials(vcenters []VCenter, credentials ComponentCrede
 **CCO validation (runtime):**
 
 ```go
-// CCO validates credentials before distributing to operators
+// CCO validates credentials before distributing to operators.
+// Detection is based on presence of component-specific secrets in kube-system,
+// NOT on a credentialsMode field — the credentialsMode field is not changed.
 func (r *ReconcileCredentialsRequest) validateVSphereCredentials(cr *minterv1.CredentialsRequest) error {
-    infra := getInfrastructure()
-    if infra.Spec.PlatformSpec.VSphere.CredentialsMode != "PerComponent" {
-        return nil // Skip validation in passthrough mode
+    // Determine component from CredentialsRequest annotation
+    // e.g. cloudcredential.openshift.io/vsphere-component: "machine-api"
+    component := cr.Annotations["cloudcredential.openshift.io/vsphere-component"]
+    if component == "" {
+        return nil // Not a component-specific credentials request
     }
     
-    componentCreds := infra.Spec.PlatformSpec.VSphere.ComponentCredentials
-    component := cr.Spec.ProviderSpec.Component // "machineAPI", "storage", etc.
+    // Look up the component secret in kube-system (created by installer)
+    secretName := componentSecretName(component) // e.g. "vsphere-machine-api-creds"
+    secret, err := getSecret("kube-system", secretName)
+    if err != nil || secret == nil {
+        return nil // No component-specific secret present; fall back to shared credential
+    }
     
-    secretRef := componentCreds[component].SecretRef
-    secret := getSecret(secretRef.Namespace, secretRef.Name)
-    
-    for _, vcenter := range infra.Spec.PlatformSpec.VSphere.VCenters {
+    for _, vcenter := range getInfrastructure().Spec.PlatformSpec.VSphere.VCenters {
         username := secret.Data[vcenter.Server + ".username"]
         password := secret.Data[vcenter.Server + ".password"]
         
@@ -487,12 +500,13 @@ func (r *ReconcileCredentialsRequest) validateVSphereCredentials(cr *minterv1.Cr
 5. Persists installer credentials in vsphere-cloud-credentials secret (may be removed in future enhancement)
 
 **Runtime:**
-1. CCO reads Infrastructure CR to determine credentials mode
-2. If PerComponent mode:
-   - Reads component credential secret references
-   - Validates credentials and privileges
+1. CCO detects presence of component-specific credential secrets in kube-system (created by installer)
+2. For each CredentialsRequest with a `cloudcredential.openshift.io/vsphere-component` annotation:
+   - Looks up the matching component secret in kube-system
+   - Validates credentials and privileges against all vCenters
+   - Provisions the credential to the operator namespace
    - Updates CredentialsRequest status with validation results
-3. Operators read their respective credential secrets
+3. Operators read their respective credential secrets from their own namespaces
 4. Components connect to vCenter using their scoped credentials
 
 #### Atomic Transition Design
@@ -503,7 +517,7 @@ func (r *ReconcileCredentialsRequest) validateVSphereCredentials(cr *minterv1.Cr
 1. Installer completes infrastructure provisioning using installer credentials
 2. Installer creates all component credential secrets in kube-system namespace
 3. Installer does NOT modify the Infrastructure CR `credentialsMode` field
-4. CCO detects presence of component-specific credential secrets in kube-system and provisions them to operator namespaces. The CCO matches credential secrets to component requests using annotations in the CredentialsRequest objects (e.g., `cloudcredential.openshift.io/mode: passthrough`) that map to the component-specific secret names
+4. CCO detects presence of component-specific credential secrets and provisions them based on the component request. The CCO maps secrets to CredentialsRequest objects using the `cloudcredential.openshift.io/vsphere-component` annotation (see example: [cluster-storage-operator CredentialsRequest](https://raw.githubusercontent.com/openshift/cluster-storage-operator/refs/heads/main/manifests/03_credentials_request_vsphere_csi.yaml))
 5. Operators restart and begin using component-specific credentials from their respective namespaces
 6. Installer credentials remain persisted in vsphere-cloud-credentials for now (may be removed in future enhancement)
 
@@ -662,10 +676,10 @@ func (c *ComponentClient) GetCredentialsForVCenter(vcenterFQDN string) (string, 
    - **Question**: Customer demand for 6.7 or 7.x support?
    - **Future consideration**: Backport if significant demand, with privilege validation caveats
 
-4. **Should diagnostics component have separate credentials?**
+4. **Should the vSphere Problem Detector (vsphere-problem-detector) have separate credentials?**
    - **Current decision**: Yes, for consistency and principle of least privilege
-   - **Question**: Is read-only diagnostic access sufficient?
-   - **Resolution needed**: Validate must-gather operations against minimal privilege set
+   - **Finding**: Review of `pkg/check/permissions.go` confirms it requires the same full privilege set as the shared credential (it validates that its own credential has the required privileges). The credential is not read-only.
+   - **Resolution**: Use the full privilege set documented in the Privilege Requirements section above
 
 ## Test Plan
 
@@ -944,13 +958,13 @@ oc get infrastructure cluster -o jsonpath='{.spec.platformSpec.vsphere.component
 oc get secret vsphere-machine-api-creds -n kube-system
 oc get secret vsphere-storage-creds -n kube-system
 oc get secret vsphere-cloud-controller-creds -n kube-system
-oc get secret vsphere-diagnostics-creds -n kube-system
+oc get secret vsphere-problem-detector-creds -n kube-system
 
 # Provisioned secrets in operator namespaces (created by CCO, read by operators)
 oc get secret vsphere-machine-api-creds -n openshift-machine-api
 oc get secret vsphere-storage-creds -n openshift-cluster-csi-drivers
 oc get secret vsphere-cloud-controller-creds -n openshift-cloud-controller-manager
-oc get secret vsphere-diagnostics-creds -n openshift-config
+oc get secret vsphere-problem-detector-creds -n openshift-cluster-storage-operator
 
 # Check secret contents (example for machine-api)
 oc get secret vsphere-machine-api-creds -n kube-system -o jsonpath='{.data}' | jq 'keys'
@@ -1159,7 +1173,7 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 **Threat 2: Compromised component credential**
 - **Attack**: Attacker compromises machine-api pod and extracts credentials
 - **Mitigation**:
-  - Blast radius limited to machine-api privileges (cannot access storage/diagnostics)
+  - Blast radius limited to machine-api privileges (cannot access storage or vsphere-problem-detector credentials)
   - vCenter audit logs identify which credential performed actions
   - Other components continue operating with their isolated credentials
 
@@ -1207,7 +1221,7 @@ oc adm must-gather -- /usr/bin/gather_vsphere_credentials
 
 **Given** an administrator has pre-provisioned vCenter roles with appropriate privileges for each component  
 **And** the administrator has created install-config.yaml with component-specific credentials provided  
-**And** the administrator has provided credentials for installer, machine-api, storage, cloud-controller, and diagnostics components  
+**And** the administrator has provided credentials for installer, machine-api, storage, cloud-controller, and vsphere-problem-detector components  
 **When** the administrator runs `openshift-install create cluster`  
 **Then** the installer validates all component credentials against all vCenters  
 **And** the installer provisions infrastructure using installer credentials  
