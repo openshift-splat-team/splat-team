@@ -241,11 +241,17 @@ Each vSphere component ships a `CredentialsRequest` CR that CCO uses to provisio
 | Component | Repository | CR Name | `capability.openshift.io/name` | Proposed Component Annotation | Secret Name | Secret Namespace |
 |-----------|-----------|---------|--------------------------------|-------------------------------|-------------|-----------------|
 | Machine API | `openshift/machine-api-operator` | `openshift-machine-api-vsphere` | `MachineAPI+CloudCredential` | `vsphere-component: machineAPI` | `vsphere-cloud-credentials` | `openshift-machine-api` |
+| Cluster API | `openshift/cluster-capi-operator` | `openshift-cluster-api-vsphere` | `MachineAPI+CloudCredential` (feature-gated) | `vsphere-component: machineAPI` | `capv-manager-bootstrap-credentials` | `openshift-cluster-api` |
 | CSI Driver | `openshift/cluster-storage-operator` | `openshift-vmware-vsphere-csi-driver-operator` | `Storage+CloudCredential` | `vsphere-component: csiDriver` | `vmware-vsphere-cloud-credentials` | `openshift-cluster-csi-drivers` |
 | Cloud Controller | `openshift/cluster-cloud-controller-manager-operator` | `openshift-vsphere-cloud-controller-manager` | `CloudCredential+CloudControllerManager` | `vsphere-component: cloudController` | `vsphere-cloud-credentials` | `openshift-cloud-controller-manager` |
 | Diagnostics | `openshift/cluster-storage-operator` | `openshift-vsphere-problem-detector` | `Storage+CloudCredential` | `vsphere-component: diagnostics` | `vsphere-cloud-credentials` | `openshift-cluster-storage-operator` |
 
 The `cloudcredential.openshift.io/vsphere-component` annotation value aligns with the `componentCredentials` keys in `install-config.yaml` (`machineAPI`, `csiDriver`, `cloudController`, `diagnostics`). When CCO processes a CredentialsRequest with this annotation and per-component credentials are configured, it routes the matching credential to the component's secret. If the annotation is absent or the component key has no per-component credential, CCO falls back to the shared credential.
+
+Multiple CRs may share the same component annotation value — for example, Machine API (`openshift-machine-api-vsphere`) and Cluster API (`openshift-cluster-api-vsphere`) both use `vsphere-component: machineAPI`, so CCO provisions the same per-component `machineAPI` credential to both their secrets. The Cluster API CR is feature-gated behind `ClusterAPIMachineManagement` and is only present when CAPI machine management is enabled.
+
+> **Research finding — vSphere Problem Detector has a dedicated CredentialsRequest CR:**
+> Research into `openshift/cluster-storage-operator` (manifests directory) confirms that the vSphere Problem Detector already ships its own dedicated CredentialsRequest CR (`openshift-vsphere-problem-detector`), separate and distinct from the CSI Driver CR (`openshift-vmware-vsphere-csi-driver-operator`). Both CRs are deployed by `cluster-storage-operator` but are independent manifests, each provisioning credentials into different secrets in different namespaces (`openshift-cluster-storage-operator` vs `openshift-cluster-csi-drivers`). This existing separation aligns with the design goal of per-component privilege isolation: the diagnostics credential scope (2 privileges: `Sessions.ValidateSession`, `System.Read`) is independent from the storage credential scope (6 privileges). The proposed `cloudcredential.openshift.io/vsphere-component: diagnostics` annotation is added to the **existing dedicated CR** (`openshift-vsphere-problem-detector`), not to the CSI Driver CR.
 
 ### Error Handling
 
