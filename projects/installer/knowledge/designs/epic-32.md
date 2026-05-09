@@ -767,7 +767,7 @@ Stories completed as of 2026-05-09:
 | #39 | Component Operator Credential Loading | ✅ Done | MAO#4, CSO#4, CCMO#4 |
 | #40 | Installer Pre-flight Component Credential Validation | ✅ Done | openshift-splat-team/installer#15 |
 | #41 | vCenter Role Creation Scripts for Per-Component Credentials | ✅ Done | openshift-splat-team/installer#16 |
-| #42 | Per-Component Credential Privilege Documentation | ✅ Done | openshift-splat-team/installer (cw) |
+| #42 | Per-Component Credential Privilege Documentation | ✅ Done | openshift-splat-team/installer#18 |
 | #43 | E2E Test Suite for Per-Component Credential Installation | ✅ Done | openshift-splat-team/installer#17 |
 
 ## Implementation Notes
