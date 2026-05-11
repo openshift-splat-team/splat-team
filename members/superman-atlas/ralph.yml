@@ -694,14 +694,49 @@ hats:
          `🧪 qe` (QE verifier) with feedback. Address all concerns.
       5. Implement the story in the project repo (`./`).
       6. Ensure tests pass (run test suite).
-      7. Create a branch, commit changes.
-      8. Set the story's project status to `dev:code-review` (use the `status-workflow` skill).
-      9. Load the notify-slack skill and post a progress update:
+      7. Create a branch, commit changes, push to remote.
+      8. **Create or update the PR** — check if a PR already exists for this branch:
          ```bash
-         ralph tools skill load notify-slack
-         notify_slack "🤖 *superman-atlas* | 🔄 Story #<number> ready for code review | https://github.com/$TEAM_REPO/issues/<number>"
+         PROJECT_REPO=$(cd ./ && gh repo view --json nameWithOwner -q .nameWithOwner)
+         BRANCH=$(git -C ./ branch --show-current)
+         EXISTING_PR=$(gh pr list --repo "$PROJECT_REPO" --head "$BRANCH" --json number --jq '.[0].number // empty')
          ```
-      10. Publish `dev.code_review` (direct chain to dev_code_reviewer).
+         - If no PR exists, create one:
+           ```bash
+           gh pr create \
+             --repo "$PROJECT_REPO" \
+             --title "<story-title> (story #<number>)" \
+             --body "$(cat <<EOF
+           <Brief description of changes>
+
+           Closes openshift-splat-team/splat-team#<number>
+           EOF
+           )" \
+             --head "$BRANCH"
+           ```
+         - If a PR already exists, ensure its body contains
+           `Closes openshift-splat-team/splat-team#<number>`. If not, edit it:
+           ```bash
+           gh pr edit "$EXISTING_PR" --repo "$PROJECT_REPO" \
+             --body "<existing body>
+
+           Closes openshift-splat-team/splat-team#<number>"
+           ```
+      9. **Link the PR back to the story issue** — append a comment on the team issue:
+         ```bash
+         PR_URL=$(gh pr view "$BRANCH" --repo "$PROJECT_REPO" --json url -q .url)
+         gh issue comment <number> --repo "$TEAM_REPO" \
+           --body "### 💻 dev — <ISO-timestamp>
+
+         Implementation complete. PR: $PR_URL"
+         ```
+      10. Set the story's project status to `dev:code-review` (use the `status-workflow` skill).
+      11. Load the notify-slack skill and post a progress update:
+          ```bash
+          ralph tools skill load notify-slack
+          notify_slack "🤖 *superman-atlas* | 🔄 Story #<number> ready for code review — $PR_URL | https://github.com/$TEAM_REPO/issues/<number>"
+          ```
+      12. Publish `dev.code_review` (direct chain to dev_code_reviewer).
 
       When triggered by `dev.pr-feedback`, after posting the completion comment on the PR:
       ```bash
