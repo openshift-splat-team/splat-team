@@ -165,11 +165,24 @@ All other transitions auto-advance without human interaction.
 ### How approval works
 
 1. The agent adds a **review request comment** on the issue summarizing the artifact
-2. The agent **returns control** and moves on to other work
-3. The **human** reviews the artifact on GitHub and responds via an issue comment:
-   - `Approved` (or `LGTM`) → agent advances the status on the next scan cycle
-   - `Rejected: <feedback>` → agent reverts the status and appends the feedback
-4. If no human comment is found, the issue stays at its review status — **the agent NEVER auto-approves**
+2. For design reviews (`po:design-review`), the agent creates a **PR** with the design document and links it in a follow-up comment
+3. The agent **returns control** and moves on to other work
+4. The **human** reviews the artifact on GitHub and responds via **one of two methods**:
+
+**Method 1: Issue comments (all review gates)**
+   - Comment on the epic issue with: `Approved` (or `LGTM`) → agent advances the status on the next scan cycle
+   - Comment on the epic issue with: `Rejected: <feedback>` → agent reverts the status and incorporates feedback
+
+**Method 2: PR inline comments (design reviews only)**
+   - Leave inline comments on specific lines in the design PR
+   - Agent detects inline comments and treats them as actionable feedback
+   - Agent updates the design document to address each comment
+   - Agent pushes changes to the PR and replies to each comment
+   - Agent continues iterating until human comments `Approved` on the issue or PR is formally approved
+   
+5. If no human response is found (no issue comment, no PR comments, no PR approval), the issue stays at its review status — **the agent NEVER auto-approves**
+
+**Note:** For design PRs, the PR author is the bot account (rvanderp3), so humans cannot use GitHub's formal "Request changes" review feature. Use inline PR comments to provide feedback, and comment `Approved` on the epic issue when ready to advance.
 
 ### Idempotency
 

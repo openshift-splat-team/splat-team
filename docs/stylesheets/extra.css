@@ -1,0 +1,108 @@
+/*
+ * Red Hat Brand Colors & Design Tokens
+ * Aligned with Red Hat Design System (https://ux.redhat.com/)
+ * and PatternFly (https://www.patternfly.org/)
+ */
+
+:root {
+  /* Red Hat Brand Colors */
+  --rh-red: #CC0000;
+  --rh-red-hover: #A30000;
+
+  /* PatternFly Primary Colors */
+  --pf-blue: #0066CC;
+  --pf-blue-hover: #004D99;
+
+  /* Status Colors (PatternFly) */
+  --pf-danger: #B1380B;
+  --pf-warning: #FFCC17;
+  --pf-success: #3D7317;
+  --pf-info: #5E40BE;
+
+  /* Red Hat Fonts */
+  --rh-font-family: "Red Hat Text", "Overpass", "Helvetica Neue", Arial, sans-serif;
+  --rh-font-family-mono: "Red Hat Mono", "Overpass Mono", "Courier New", monospace;
+}
+
+/* Apply Red Hat brand colors to primary elements */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: var(--rh-red);
+  --md-primary-fg-color--dark: var(--rh-red-hover);
+  --md-accent-fg-color: var(--pf-blue);
+  --md-accent-fg-color--transparent: rgba(0, 102, 204, 0.1);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: var(--rh-red);
+  --md-primary-fg-color--dark: var(--rh-red-hover);
+  --md-accent-fg-color: var(--pf-blue);
+  --md-accent-fg-color--transparent: rgba(0, 102, 204, 0.1);
+}
+
+/* Red Hat Typography */
+body {
+  font-family: var(--rh-font-family);
+}
+
+code, kbd, pre {
+  font-family: var(--rh-font-family-mono);
+}
+
+/* PatternFly-style admonitions */
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-color: var(--pf-warning);
+}
+
+.md-typeset .admonition.danger,
+.md-typeset details.danger {
+  border-color: var(--pf-danger);
+}
+
+.md-typeset .admonition.success,
+.md-typeset details.success {
+  border-color: var(--pf-success);
+}
+
+.md-typeset .admonition.info,
+.md-typeset details.info {
+  border-color: var(--pf-info);
+}
+
+/* Improve link accessibility - ensure sufficient contrast */
+.md-typeset a {
+  color: var(--pf-blue);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.md-typeset a:hover {
+  color: var(--pf-blue-hover);
+}
+
+/* Accessible focus states */
+a:focus,
+button:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--pf-blue);
+  outline-offset: 2px;
+}
+
+/* Skip to content link for accessibility */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--rh-red);
+  color: white;
+  padding: 8px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-to-content:focus {
+  top: 0;
+}

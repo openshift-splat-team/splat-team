@@ -1,0 +1,75 @@
+site_name: SPLAT Team Documentation
+site_url: https://splat-team.netlify.app
+repo_url: https://github.com/openshift-splat-team/splat-team
+repo_name: openshift-splat-team/splat-team
+site_description: Documentation for the SPLAT team, aligned with Red Hat design principles
+
+theme:
+  name: material
+  custom_dir: docs/overrides
+  palette:
+    # Light mode - Red Hat brand colors
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode - Red Hat brand colors
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Red Hat Text
+    code: Red Hat Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/openshift-splat-team
+  design_system:
+    note: "This documentation follows Red Hat design principles and PatternFly design tokens where applicable."
+
+nav:
+  - Home: index.md
+  - Accessibility: accessibility.md
