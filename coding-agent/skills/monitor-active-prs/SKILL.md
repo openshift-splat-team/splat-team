@@ -155,20 +155,34 @@ check_pr_feedback() {
     fi
   fi
   
-  # Check for PR-level comments (questions/discussions on the PR itself)
-  RECENT_COMMENTS=$(echo "$PR_DATA" | jq -r '
-    [.comments[] | 
-     select(.author.login != "splat-sdlc-agent[bot]") |
+  # Check for PR-level comments (human feedback on the PR conversation)
+  LATEST_PR_COMMENT=$(echo "$PR_DATA" | jq -r '
+    [.comments[] |
+     select(.author.login | (endswith("[bot]") or . == "splatypus-bot") | not) |
      select(.body | length > 10)] |
-    length
+    sort_by(.createdAt) | reverse | .[0]
   ')
-  
-  if [ "$RECENT_COMMENTS" -gt 0 ]; then
-    echo "PR #${pr_num} (story #${STORY_NUM}) has ${RECENT_COMMENTS} PR-level comment(s)"
-    
-    # Emit event for discussion monitoring
-    ralph tools pubsub publish dev.pr-discussion \
-      "story=${STORY_NUM}, project=${project}, pr=${pr_num}, comments=${RECENT_COMMENTS}"
+
+  if [ "$LATEST_PR_COMMENT" != "null" ] && [ -n "$LATEST_PR_COMMENT" ]; then
+    COMMENTER=$(echo "$LATEST_PR_COMMENT" | jq -r '.author.login')
+    COMMENT_TIME=$(echo "$LATEST_PR_COMMENT" | jq -r '.createdAt')
+
+    # Check if already responded to this comment
+    LAST_BOT_RESPONSE=$(echo "$PR_DATA" | jq -r '
+      [.comments[] |
+       select(.author.login == "splatypus-bot") |
+       select(.body | contains("Feedback Acknowledged") or contains("Working on") or contains("Feedback addressed"))] |
+      sort_by(.createdAt) | reverse | .[0].createdAt // empty
+    ')
+
+    if [ -z "$LAST_BOT_RESPONSE" ] || [ "$COMMENT_TIME" \> "$LAST_BOT_RESPONSE" ]; then
+      echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has unaddressed PR comment from @${COMMENTER}"
+
+      ralph tools pubsub publish "$FEEDBACK_EVENT" \
+        "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${COMMENTER}"
+
+      return 0
+    fi
   fi
 }
 ```
