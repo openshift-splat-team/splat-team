@@ -1,6 +1,6 @@
-# PR Monitoring Duplicate Processing Fix
+# PR Monitoring Fixes
 
-## Problem
+## Problem 1: Duplicate Processing
 
 The `monitor-active-prs` skill processes the same PRs multiple times even when they have no new updates.
 
@@ -78,3 +78,37 @@ Edit `/home/splat/.botminter/workspaces/splat/team/coding-agent/skills/monitor-a
 Apply similar fixes to:
 - The inline review comments check (lines 120-128)
 - The PR-level comments check (if needed)
+
+## Problem 2: Missing Post-Merge Feedback
+
+The skill only checked `--state open` PRs, missing feedback on recently merged PRs.
+
+**Impact:**
+- Post-merge comments were ignored (security concerns, late reviews, etc.)
+- PRs associated with "done" stories were not monitored
+- Follow-up discussions after merge were missed
+
+## Solution 2: Monitor Recently Merged PRs
+
+Updated `scan_all_prs()` to also check merged PRs from the last 7 days:
+
+```bash
+# Get recently merged PRs (last 7 days) - may still have active discussion
+MERGED_PRS=$(gh pr list \
+  --repo "openshift-splat-team/${project}" \
+  --state merged \
+  --search "merged:>$(date -d '7 days ago' +%Y-%m-%d)" \
+  --json number \
+  --jq '.[].number' 2>/dev/null || echo "")
+
+# Combine both lists
+ALL_PRS="$OPEN_PRS $MERGED_PRS"
+```
+
+**Why 7 days?**
+- Balances completeness with performance
+- Most post-merge feedback arrives within a week
+- Prevents scanning thousands of old PRs
+- Can be adjusted if needed
+
+**Key principle:** Story status is independent of PR monitoring. Even if a story is marked "done", its PR should still be monitored for important feedback.

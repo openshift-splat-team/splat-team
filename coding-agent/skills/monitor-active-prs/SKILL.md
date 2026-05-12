@@ -1,12 +1,12 @@
 ---
 name: Monitor Active PRs
-description: Check all active staging PRs for review comments and trigger responses
+description: Check all open and recently merged staging PRs for review comments and trigger responses
 auto_inject: true
 ---
 
 # Monitor Active PRs
 
-Scan all active staging PRs in openshift-splat-team forks for review comments and trigger appropriate responses.
+Scan all open and recently merged staging PRs in openshift-splat-team forks for review comments and trigger appropriate responses.
 
 ## Purpose
 
@@ -20,12 +20,13 @@ This skill is called by the board scanner to check PRs in parallel with issue sc
 
 ## What It Does
 
-1. **Find Active PRs** - Lists all open PRs in staging forks
+1. **Find Active PRs** - Lists all open PRs AND recently merged PRs (last 7 days) in staging forks
 2. **Check for Feedback** - Looks for:
    - Reviews with "CHANGES_REQUESTED" state
    - Inline review comments (code-level feedback)
    - PR-level comments (general discussions)
-3. **Emit Events** - Triggers dev.pr-feedback for PRs needing response
+   - Post-merge feedback (security concerns, late reviews, follow-up questions)
+3. **Emit Events** - Triggers dev.pr-feedback for PRs needing response, regardless of story status
 
 ## Implementation
 
@@ -42,11 +43,19 @@ PROJECTS=(
   "vcf-migration-operator"
 )
 
-# Check each project for open PRs
+# Check each project for open AND recently merged PRs
 for project in "${PROJECTS[@]}"; do
+  # Get open PRs
   gh pr list \
     --repo "openshift-splat-team/${project}" \
     --state open \
+    --json number,headRefName,updatedAt,reviewDecision
+  
+  # Get recently merged PRs (last 7 days) - may still have active discussion
+  gh pr list \
+    --repo "openshift-splat-team/${project}" \
+    --state merged \
+    --search "merged:>$(date -d '7 days ago' +%Y-%m-%d)" \
     --json number,headRefName,updatedAt,reviewDecision
 done
 ```
@@ -168,17 +177,28 @@ scan_all_prs() {
   
   for project in "${PROJECTS[@]}"; do
     # Get open PRs
-    PRS=$(gh pr list \
+    OPEN_PRS=$(gh pr list \
       --repo "openshift-splat-team/${project}" \
       --state open \
       --json number \
       --jq '.[].number')
     
-    if [ -z "$PRS" ]; then
+    # Get recently merged PRs (last 7 days) - may still have active discussion
+    MERGED_PRS=$(gh pr list \
+      --repo "openshift-splat-team/${project}" \
+      --state merged \
+      --search "merged:>$(date -d '7 days ago' +%Y-%m-%d)" \
+      --json number \
+      --jq '.[].number' 2>/dev/null || echo "")
+    
+    # Combine both lists
+    ALL_PRS="$OPEN_PRS $MERGED_PRS"
+    
+    if [ -z "$ALL_PRS" ]; then
       continue
     fi
     
-    for pr in $PRS; do
+    for pr in $ALL_PRS; do
       if check_pr_feedback "$project" "$pr"; then
         ((feedback_count++))
       fi
@@ -283,9 +303,12 @@ check_pr_feedback "cloud-credential-operator" 3
 ## Notes
 
 - Runs automatically during board scan (if auto_inject: true)
+- Checks **both open and recently merged** PRs (merged within last 7 days)
+- Monitors post-merge feedback - important for catching late reviews, security concerns, etc.
 - Only checks openshift-splat-team/* staging forks
 - Does not check upstream openshift/* PRs
 - Idempotent - won't trigger duplicate responses
 - Emits events that dev_implementer can handle
+- **Story status doesn't matter** - PRs are monitored regardless of whether the story is "done"
 
 This skill ensures that PR feedback is never missed and responses are timely! 🚀
