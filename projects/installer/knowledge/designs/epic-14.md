@@ -169,7 +169,7 @@ This shared credential model creates critical security and compliance issues:
 
 #### Migration Workflow (Existing Cluster)
 
-**Zero-downtime migration path:**
+**Migration path:**
 
 1. **Administrator creates new component credentials** in vCenter with restricted privileges
 
