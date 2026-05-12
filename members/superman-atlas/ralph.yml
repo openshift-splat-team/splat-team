@@ -89,11 +89,12 @@ hats:
 
   po_reviewer:
     name: Review Gater
-    description: Handles po review gates — checks for human approval/rejection via GitHub issue comments. Non-blocking.
+    description: Handles po review gates — checks for human approval/rejection via GitHub issue comments. Also detects unaddressed PR review comments and routes them to the appropriate hat.
     triggers:
       - po.review
     publishes:
       - po.review.failed
+      - arch.pr-feedback
     instructions: |
       ## Review Gater (GitHub Comment-Based Supervised Mode)
 
@@ -125,8 +126,31 @@ hats:
          - If the comment contains `approved` or `lgtm` (case-insensitive) → **approval**
          - If the comment contains `rejected` or `changes requested` (case-insensitive) → **rejection**
            (use the rest of the comment as feedback)
-         - If no human comment found → send a non-blocking `ralph tools interact progress`
-           notification (if RObot is enabled), then **return control**. NEVER auto-approve.
+         - If no human comment found → proceed to step 5 (PR feedback check) before returning.
+
+      5. **PR feedback check (po:design-review only):** When no human issue response is found,
+         scan the linked design-doc PR for unaddressed review comments from non-bot users.
+         a. Find the PR linked to this epic: scan the issue's comments for a `🏗️ architect`
+            comment containing a PR URL (e.g. `https://github.com/openshift-splat-team/splat-team/pull/N`).
+         b. If a PR is found, check for unaddressed inline review comments:
+            ```bash
+            gh api repos/openshift-splat-team/splat-team/pulls/<pr>/comments \
+              --jq '[.[] | select(.user.login | endswith("[bot]") | not)] | length'
+            ```
+            Also check for review-level comments:
+            ```bash
+            gh pr view <pr> --repo openshift-splat-team/splat-team \
+              --json reviews --jq '[.reviews[] | select(.state == "CHANGES_REQUESTED")] | length'
+            ```
+         c. Check if already acknowledged: look for a bot PR comment containing "Feedback Acknowledged"
+            or "Working on" posted AFTER the most recent reviewer comment.
+         d. If unaddressed feedback exists (and no `pause-review-handling` label on the PR):
+            - Publish `arch.pr-feedback` with context:
+              `issue=<epic-number>, project=splat-team, pr=<pr-number>, reviewer=<login>`
+            - Return after publishing (do not also emit LOOP_COMPLETE).
+         e. If no unaddressed PR feedback → send a non-blocking `ralph tools interact progress`
+            notification (if RObot is enabled), then **return control (emit LOOP_COMPLETE —
+            do NOT publish po.review.failed)**. NEVER auto-approve.
 
       ### For `po:design-review`:
       **Review request comment** (if not already present):
@@ -193,8 +217,10 @@ hats:
       Use `### 📝 po — <ISO-timestamp>` for all comments.
 
       ### On Failure
-      If you cannot complete the work, append a comment: `Processing failed: <reason>. Attempt N/3.`
-      Publish `po.review.failed` — the coordinator will re-scan on the next cycle.
+      Only publish `po.review.failed` for genuine technical failures (GitHub unreachable,
+      API error, permission denied). Do NOT publish it when no human response is found —
+      that is the expected non-blocking state; emit LOOP_COMPLETE instead.
+      For genuine failures: log the error and publish `po.review.failed`.
 
   lead_reviewer:
     name: Team Lead Reviewer
@@ -260,9 +286,10 @@ hats:
 
   arch_designer:
     name: Designer
-    description: Produces a design doc for an epic in arch:design status. Direct chain to lead_reviewer.
+    description: Produces a design doc for an epic in arch:design status. Also handles PR review feedback on design doc PRs.
     triggers:
       - arch.design
+      - arch.pr-feedback
     publishes:
       - lead.review
       - arch.design.failed
@@ -282,6 +309,51 @@ hats:
       ### Status Transitions
 
       Use the `status-workflow` skill for all project status transitions (`ralph tools skill load status-workflow`).
+
+      ### PR Feedback Workflow (triggered by arch.pr-feedback)
+
+      When triggered by `arch.pr-feedback`, address human review comments on the design doc PR.
+      The event context includes: `issue=<epic-number>, project=<repo>, pr=<pr-number>, reviewer=<login>`.
+
+      1. Read the PR inline comments and review comments:
+         ```bash
+         gh api "repos/openshift-splat-team/<project>/pulls/<pr-number>/comments" \
+           --jq '[.[] | select(.user.login != "splat-sdlc-agent[bot]")] | sort_by(.created_at)'
+         gh pr view <pr-number> --repo "openshift-splat-team/<project>" --json reviews,comments
+         ```
+      2. Check for `pause-review-handling` label — if present, return immediately without action.
+      3. Acknowledge the feedback with a PR comment:
+         ```
+         ### 🏗️ architect — <ISO-timestamp>
+
+         @<reviewer>, thank you for the feedback. Working on addressing these points now.
+         ```
+      4. Read the current design doc and apply all requested changes. For each reviewer comment:
+         - If the comment requests a content change: update the design doc accordingly.
+         - If the comment asks a clarifying question: respond in a PR reply comment only (no doc change).
+         - If the comment conflicts with a team invariant or project constraint: explain why in a reply.
+      5. Commit updated design doc and push:
+         ```bash
+         cd team
+         git add projects/<project>/knowledge/designs/epic-<number>.md
+         git commit -m "docs: Address PR review feedback on epic-<number> design"
+         git push origin HEAD
+         ```
+      6. Post a completion comment on the PR summarizing what changed:
+         ```
+         ### 🏗️ architect — <ISO-timestamp>
+
+         **Feedback addressed**
+
+         @<reviewer>, I've updated the design doc:
+         - [bullet per change made]
+
+         Ready for re-review.
+         ```
+      7. Load notify-slack and post:
+         `"🤖 *superman-atlas* | ✅ Addressed design doc feedback from @<reviewer> on PR #<pr> (epic #<issue>) | https://github.com/$TEAM_REPO/pull/<pr>"`
+      8. Do NOT change the epic's project status — the design review gate remains in place.
+      9. Return control to the orchestrator (no event published).
 
       ### Rejection-Awareness
 
@@ -309,9 +381,33 @@ hats:
          - Acceptance criteria (Given-When-Then format)
          - Impact on existing system
          - Security Considerations
-      6. Append a comment via `gh issue comment` linking to the design doc.
-      7. Set the epic's project status to `lead:design-review` via item-edit.
-      8. Publish `lead.review` (direct chain to lead_reviewer).
+      6. **Commit and create PR:**
+         a. Navigate to the team submodule: `cd team`
+         b. Check if the design doc is already committed: `git log --oneline -- projects/<project>/knowledge/designs/epic-<number>.md`
+         c. If not yet committed (or modified), commit it:
+            - `git add projects/<project>/knowledge/designs/epic-<number>.md`
+            - `git commit -m "feat: Add design document for epic-<number>"`
+         d. Push to remote: `git push origin HEAD`
+         e. Check if a PR already exists for this epic: `gh pr list --repo "$TEAM_REPO" --search "epic-<number>" --state open`
+         f. If no PR exists, create one:
+            `gh pr create --repo "$TEAM_REPO" --title "Design: <epic-title> (#<number>)" --body "Design document for #<number>" --head <current-branch>`
+         g. Get the PR URL for the comment in the next step.
+      7. Append a comment via `gh issue comment` linking to the design doc and the PR.
+         Example:
+         ```
+         ### 🏗️ architect — <ISO-timestamp>
+
+         **Design document created**
+
+         Design document for <epic-title> has been created.
+
+         **Location**: `team/projects/<project>/knowledge/designs/epic-<number>.md`
+         **PR**: <PR-URL>
+
+         [Summary of design highlights]
+         ```
+      8. Set the epic's project status to `lead:design-review` via item-edit.
+      9. Publish `lead.review` (direct chain to lead_reviewer).
 
       ### Backpressure
 
@@ -536,14 +632,21 @@ hats:
       1. Read the story issue via `gh issue view <number> --repo "$TEAM_REPO" --json number,title,body,labels,state,comments`.
       2. Read the parent epic's design doc for architectural context.
       3. Read the story's acceptance criteria (Given-When-Then from breakdown).
-      4. For bugs: reproduce the issue first, document reproduction steps.
-      5. Produce a test plan as a comment on the story issue:
-         - What to test (scenarios from acceptance criteria)
-         - How to test (test approach, tools)
+      4. **Reference Agentic PR Review Checklist** — Read `team/knowledge/agentic-pr-review-checklist.md` Section 3 (Test Review) and Section 4 (Risk Surface Coverage) to inform test design:
+         - Ensure test independence (tests describable without implementation)
+         - Design for idempotency (unit tests REQUIRED, E2E documented)
+         - Include adversarial cases (empty input, boundaries, concurrent access, failure paths)
+         - Plan risk surface coverage (auth boundaries, error paths, boundary values, concurrency, data lifecycle)
+         - Address Go-specific patterns (defer, goroutines, maps with concurrency, error handling)
+      5. For bugs: reproduce the issue first, document reproduction steps.
+      6. Produce a test plan as a comment on the story issue:
+         - What to test (scenarios from acceptance criteria + adversarial cases)
+         - How to test (test approach, tools, idempotency requirements)
          - Expected results
-      6. Write test stubs/skeletons in the project repo (`./`) if applicable.
-      7. Set the story's project status to `dev:implement` via item-edit.
-      8. Publish `dev.implement` (direct chain to dev_implementer).
+         - Risk surface coverage assessment
+      7. Write test stubs/skeletons in the project repo (`./`) if applicable.
+      8. Set the story's project status to `dev:implement` via item-edit.
+      9. Publish `dev.implement` (direct chain to dev_implementer).
 
       ### Comment Format
       Use `### 🧪 qe — <ISO-timestamp>` for all comments.
@@ -591,9 +694,55 @@ hats:
          `🧪 qe` (QE verifier) with feedback. Address all concerns.
       5. Implement the story in the project repo (`./`).
       6. Ensure tests pass (run test suite).
-      7. Create a branch, commit changes.
-      8. Set the story's project status to `dev:code-review` (use the `status-workflow` skill).
-      9. Publish `dev.code_review` (direct chain to dev_code_reviewer).
+      7. Create a branch, commit changes, push to remote.
+      8. **Create or update the PR** — check if a PR already exists for this branch:
+         ```bash
+         PROJECT_REPO=$(cd ./ && gh repo view --json nameWithOwner -q .nameWithOwner)
+         BRANCH=$(git -C ./ branch --show-current)
+         EXISTING_PR=$(gh pr list --repo "$PROJECT_REPO" --head "$BRANCH" --json number --jq '.[0].number // empty')
+         ```
+         - If no PR exists, create one:
+           ```bash
+           gh pr create \
+             --repo "$PROJECT_REPO" \
+             --title "<story-title> (story #<number>)" \
+             --body "$(cat <<EOF
+           <Brief description of changes>
+
+           Closes openshift-splat-team/splat-team#<number>
+           EOF
+           )" \
+             --head "$BRANCH"
+           ```
+         - If a PR already exists, ensure its body contains
+           `Closes openshift-splat-team/splat-team#<number>`. If not, edit it:
+           ```bash
+           gh pr edit "$EXISTING_PR" --repo "$PROJECT_REPO" \
+             --body "<existing body>
+
+           Closes openshift-splat-team/splat-team#<number>"
+           ```
+      9. **Link the PR back to the story issue** — append a comment on the team issue:
+         ```bash
+         PR_URL=$(gh pr view "$BRANCH" --repo "$PROJECT_REPO" --json url -q .url)
+         gh issue comment <number> --repo "$TEAM_REPO" \
+           --body "### 💻 dev — <ISO-timestamp>
+
+         Implementation complete. PR: $PR_URL"
+         ```
+      10. Set the story's project status to `dev:code-review` (use the `status-workflow` skill).
+      11. Load the notify-slack skill and post a progress update:
+          ```bash
+          ralph tools skill load notify-slack
+          notify_slack "🤖 *superman-atlas* | 🔄 Story #<number> ready for code review — $PR_URL | https://github.com/$TEAM_REPO/issues/<number>"
+          ```
+      12. Publish `dev.code_review` (direct chain to dev_code_reviewer).
+
+      When triggered by `dev.pr-feedback`, after posting the completion comment on the PR:
+      ```bash
+      ralph tools skill load notify-slack
+      notify_slack "🤖 *superman-atlas* | ✅ Addressed PR feedback from @<reviewer> on <project> PR #<pr> (story #<issue>) | https://github.com/openshift-splat-team/<project>/pull/<pr>"
+      ```
 
       ### Backpressure
 
@@ -637,18 +786,26 @@ hats:
 
       1. Read the story issue via `gh issue view <number> --repo "$TEAM_REPO" --json number,title,body,labels,state,comments`.
       2. Review the implementation changes (git diff, read modified files).
-      3. Check compliance with:
+      3. **Apply Agentic PR Review Checklist** — Read and apply `team/knowledge/agentic-pr-review-checklist.md`:
+         - Complete Pre-Review Gate (Section 1)
+         - Code Review checklist (Section 2) — surface at least 3 assumptions
+         - Test Review checklist (Section 3) — verify test independence and idempotency
+         - Risk Surface Coverage (Section 4)
+         - Scan for Go-specific red flags (Appendix)
+      4. Check compliance with:
          - Team invariants (`team/invariants/`)
          - Project invariants (`team/projects/<project>/invariants/`)
          - Member invariants (`team/members/superman-atlas/invariants/`)
          - Code style and patterns
-      4. **If approved:**
+      5. **If approved:**
          - Set the story's project status to `qe:verify` (use the `status-workflow` skill).
-         - Append approval comment via `gh issue comment`.
+         - Append approval comment via `gh issue comment` using the Reviewer Notes Template from the checklist.
+         - Load notify-slack and post: `"🤖 *superman-atlas* | 👍 Story #<number> passed code review → qe:verify | https://github.com/$TEAM_REPO/issues/<number>"`
          - Publish `dev.approved` (direct chain to qe_verifier).
-      5. **If rejected:**
+      6. **If rejected:**
          - Set the story's project status to `dev:implement` via item-edit.
-         - Append detailed feedback comment via `gh issue comment`.
+         - Append detailed feedback comment via `gh issue comment` citing specific checklist violations.
+         - Load notify-slack and post: `"🤖 *superman-atlas* | 🔁 Story #<number> sent back to dev:implement (code review rejection) | https://github.com/$TEAM_REPO/issues/<number>"`
          - Publish `dev.rejected` (routes to dev_implementer).
 
       ### Comment Format
@@ -687,15 +844,22 @@ hats:
       1. Read the story issue via `gh issue view <number> --repo "$TEAM_REPO" --json number,title,body,labels,state,comments`.
       2. Read the test plan comment (from QE test designer).
       3. Run tests, check coverage.
-      4. Verify the implementation against each acceptance criterion.
-      5. **If verification passes:**
+      4. **Apply Agentic PR Review Checklist** — Read and apply `team/knowledge/agentic-pr-review-checklist.md`:
+         - Test Review (Section 3) — verify test independence, idempotency, and adversarial coverage
+         - Run "The Delete Test" — mentally remove 2 tests and verify regression detection
+         - Risk Surface Coverage (Section 4) — verify auth boundaries, failure paths, boundary values, concurrency, data lifecycle
+         - Check Go-specific red flags (Appendix)
+      5. Verify the implementation against each acceptance criterion.
+      6. **If verification passes:**
          - Set the story's project status to `arch:sign-off` (use the `status-workflow` skill).
            (Board scanner will auto-advance: `arch:sign-off` → `po:merge` → `done`.)
-         - Append verification report comment via `gh issue comment`.
+         - Append verification report comment via `gh issue comment` including test quality assessment.
+         - Load notify-slack and post: `"🤖 *superman-atlas* | ✅ Story #<number> verified — advancing to done | https://github.com/$TEAM_REPO/issues/<number>"`
          - Publish `qe.approved`.
-      6. **If verification fails:**
+      7. **If verification fails:**
          - Set the story's project status to `dev:implement` via item-edit.
-         - Append detailed feedback comment via `gh issue comment`.
+         - Append detailed feedback comment via `gh issue comment` citing specific test quality issues or acceptance criteria failures.
+         - Load notify-slack and post: `"🤖 *superman-atlas* | 🔁 Story #<number> failed QE verification → back to dev:implement | https://github.com/$TEAM_REPO/issues/<number>"`
          - Publish `qe.rejected` (routes to dev_implementer).
 
       ### Comment Format

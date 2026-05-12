@@ -35,6 +35,7 @@ This skill is called by the board scanner to check PRs in parallel with issue sc
 ```bash
 # Get all projects
 PROJECTS=(
+  "splat-team"                              # Team repo — design doc PRs
   "cloud-credential-operator"
   "cluster-cloud-controller-manager-operator"
   "cluster-storage-operator"
@@ -70,17 +71,33 @@ check_pr_feedback() {
   # Get PR details
   PR_DATA=$(gh pr view "$pr_num" \
     --repo "openshift-splat-team/${project}" \
-    --json reviews,comments,headRefName,updatedAt)
-  
-  # Extract branch name (should be story-N-xxx)
+    --json reviews,comments,headRefName,updatedAt,labels)
+
+  # Skip PRs with the pause-review-handling label
+  if echo "$PR_DATA" | jq -e '[.labels[].name] | index("pause-review-handling") != null' > /dev/null 2>&1; then
+    echo "PR #${pr_num} in ${project} has pause-review-handling label — skipping"
+    return 1
+  fi
+
+  # Extract branch name; support both story-N-xxx and epic-N-xxx patterns
   BRANCH=$(echo "$PR_DATA" | jq -r '.headRefName')
   STORY_NUM=$(echo "$BRANCH" | grep -oP 'story-\K\d+' || echo "")
-  
-  if [ -z "$STORY_NUM" ]; then
-    echo "Skipping PR #${pr_num} - not a story branch"
-    return
+  EPIC_NUM=$(echo "$BRANCH" | grep -oP 'epic-\K\d+' || echo "")
+
+  if [ -z "$STORY_NUM" ] && [ -z "$EPIC_NUM" ]; then
+    echo "Skipping PR #${pr_num} in ${project} - not a story or epic branch"
+    return 1
   fi
-  
+
+  # Determine issue number and event based on branch type
+  if [ -n "$STORY_NUM" ]; then
+    ISSUE_NUM="$STORY_NUM"
+    FEEDBACK_EVENT="dev.pr-feedback"
+  else
+    ISSUE_NUM="$EPIC_NUM"
+    FEEDBACK_EVENT="arch.pr-feedback"
+  fi
+
   # Check for changes requested
   CHANGES_REQUESTED=$(echo "$PR_DATA" | jq '
     [.reviews[] | select(.state == "CHANGES_REQUESTED")] | 
@@ -106,24 +123,24 @@ check_pr_feedback() {
       return 1
     fi
     
-    echo "PR #${pr_num} (story #${STORY_NUM}) has unaddressed feedback from @${REVIEWER}"
+    echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has unaddressed feedback from @${REVIEWER}"
     
     # Emit event to trigger response
-    ralph tools pubsub publish dev.pr-feedback \
-      "story=${STORY_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
+    ralph tools pubsub publish "$FEEDBACK_EVENT" \
+      "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
     
     return 0
   fi
-  
+
   # Check for inline review comments (from /pulls/:pull_number/comments)
   REVIEW_COMMENTS=$(gh api "repos/openshift-splat-team/${project}/pulls/${pr_num}/comments" \
     --jq '[.[] | select(.user.login != "splat-sdlc-agent[bot]")] | length')
-  
+
   if [ "$REVIEW_COMMENTS" -gt 0 ]; then
     # Get the most recent review comment
     LATEST_REVIEW_COMMENT=$(gh api "repos/openshift-splat-team/${project}/pulls/${pr_num}/comments" \
       --jq '[.[] | select(.user.login != "splat-sdlc-agent[bot]")] | sort_by(.created_at) | reverse | .[0]')
-    
+
     REVIEWER=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.user.login')
     COMMENT_TIME=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.created_at')
     
@@ -140,29 +157,43 @@ check_pr_feedback() {
       return 1
     fi
     
-    echo "PR #${pr_num} (story #${STORY_NUM}) has ${REVIEW_COMMENTS} inline review comment(s) from @${REVIEWER}"
+    echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has ${REVIEW_COMMENTS} inline review comment(s) from @${REVIEWER}"
     
     # Emit event to trigger response
-    ralph tools pubsub publish dev.pr-feedback \
-      "story=${STORY_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
+    ralph tools pubsub publish "$FEEDBACK_EVENT" \
+      "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
     
     return 0
   fi
   
-  # Check for PR-level comments (questions/discussions on the PR itself)
-  RECENT_COMMENTS=$(echo "$PR_DATA" | jq -r '
-    [.comments[] | 
-     select(.author.login != "splat-sdlc-agent[bot]") |
+  # Check for PR-level comments (human feedback on the PR conversation)
+  LATEST_PR_COMMENT=$(echo "$PR_DATA" | jq -r '
+    [.comments[] |
+     select(.author.login | (endswith("[bot]") or . == "splatypus-bot") | not) |
      select(.body | length > 10)] |
-    length
+    sort_by(.createdAt) | reverse | .[0]
   ')
-  
-  if [ "$RECENT_COMMENTS" -gt 0 ]; then
-    echo "PR #${pr_num} (story #${STORY_NUM}) has ${RECENT_COMMENTS} PR-level comment(s)"
-    
-    # Emit event for discussion monitoring
-    ralph tools pubsub publish dev.pr-discussion \
-      "story=${STORY_NUM}, project=${project}, pr=${pr_num}, comments=${RECENT_COMMENTS}"
+
+  if [ "$LATEST_PR_COMMENT" != "null" ] && [ -n "$LATEST_PR_COMMENT" ]; then
+    COMMENTER=$(echo "$LATEST_PR_COMMENT" | jq -r '.author.login')
+    COMMENT_TIME=$(echo "$LATEST_PR_COMMENT" | jq -r '.createdAt')
+
+    # Check if already responded to this comment
+    LAST_BOT_RESPONSE=$(echo "$PR_DATA" | jq -r '
+      [.comments[] |
+       select(.author.login == "splatypus-bot") |
+       select(.body | contains("Feedback Acknowledged") or contains("Working on") or contains("Feedback addressed"))] |
+      sort_by(.createdAt) | reverse | .[0].createdAt // empty
+    ')
+
+    if [ -z "$LAST_BOT_RESPONSE" ] || [ "$COMMENT_TIME" \> "$LAST_BOT_RESPONSE" ]; then
+      echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has unaddressed PR comment from @${COMMENTER}"
+
+      ralph tools pubsub publish "$FEEDBACK_EVENT" \
+        "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${COMMENTER}"
+
+      return 0
+    fi
   fi
 }
 ```

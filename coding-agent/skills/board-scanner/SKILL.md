@@ -16,6 +16,9 @@ This skill defines your PLAN step when coordinating. Scan the GitHub
 Projects v2 board, handle auto-advance transitions, then DELEGATE by
 publishing exactly one event to the appropriate hat.
 
+**CRITICAL: Steps 1–3 are MANDATORY and must execute on EVERY cycle
+regardless of board state. Never skip to dispatch without completing them.**
+
 ## Scan Procedure
 
 ### 1. Scratchpad
@@ -29,6 +32,22 @@ hat activations.
 ```bash
 git -C team pull --ff-only 2>/dev/null || true
 ```
+
+### 3. Scan all open PRs for human review feedback (MANDATORY — runs every cycle)
+
+This step MUST run on every cycle, even when the board has no actionable
+items and even when all issues are in a done/ready/human-gate state.
+PR feedback is independent of board status.
+
+```bash
+ralph tools skill load monitor-active-prs
+scan_all_prs
+```
+
+If `scan_all_prs` finds unaddressed human feedback and publishes an event,
+emit LOOP_COMPLETE for the board portion (do not also dispatch a board event).
+The PR feedback event takes priority this cycle; the board will be re-checked
+on the next cycle.
 
 ### 3. Auto-detect the team repo
 
@@ -95,18 +114,6 @@ Use `$(date -u +%Y-%m-%dT%H:%M:%SZ)` for all timestamps.
 2026-03-02T10:15:01Z — board.scan — 3 issues found
 2026-03-02T10:15:01Z — board.scan — END
 ```
-
-### 7. Monitor active PRs
-
-After scanning the board, check all active staging PRs for review feedback:
-
-```bash
-ralph tools skill load monitor-active-prs
-scan_all_prs
-```
-
-This scans all open PRs in `openshift-splat-team/*` forks for review comments
-and emits `dev.pr-feedback` events when unaddressed feedback is found.
 
 ### 8. Auto-advance
 
