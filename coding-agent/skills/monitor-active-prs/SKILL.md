@@ -84,25 +84,26 @@ check_pr_feedback() {
     REVIEWER=$(echo "$CHANGES_REQUESTED" | jq -r '.author.login')
     REVIEW_TIME=$(echo "$CHANGES_REQUESTED" | jq -r '.submittedAt')
     
-    # Check if already responded
-    LAST_RESPONSE=$(echo "$PR_DATA" | jq -r '
+    # Check if already responded - look for ANY bot comment after the review time
+    BOT_RESPONSE_COUNT=$(echo "$PR_DATA" | jq --arg review_time "$REVIEW_TIME" '
       [.comments[] | 
        select(.author.login == "splat-sdlc-agent[bot]") |
-       select(.body | contains("Feedback Addressed") or contains("Working on"))] |
-      sort_by(.createdAt) |
-      reverse |
-      .[0].createdAt // empty
+       select(.createdAt > $review_time)] |
+      length
     ')
     
-    if [ -z "$LAST_RESPONSE" ] || [ "$REVIEW_TIME" \> "$LAST_RESPONSE" ]; then
-      echo "PR #${pr_num} (story #${STORY_NUM}) has unaddressed feedback from @${REVIEWER}"
-      
-      # Emit event to trigger response
-      ralph tools pubsub publish dev.pr-feedback \
-        "story=${STORY_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
-      
-      return 0
+    if [ "$BOT_RESPONSE_COUNT" -gt 0 ]; then
+      echo "Already responded to review from @${REVIEWER} at ${REVIEW_TIME}"
+      return 1
     fi
+    
+    echo "PR #${pr_num} (story #${STORY_NUM}) has unaddressed feedback from @${REVIEWER}"
+    
+    # Emit event to trigger response
+    ralph tools pubsub publish dev.pr-feedback \
+      "story=${STORY_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
+    
+    return 0
   fi
   
   # Check for inline review comments (from /pulls/:pull_number/comments)
@@ -117,25 +118,26 @@ check_pr_feedback() {
     REVIEWER=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.user.login')
     COMMENT_TIME=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.created_at')
     
-    # Check if already responded to this review comment
-    LAST_RESPONSE=$(echo "$PR_DATA" | jq -r '
+    # Check if already responded - look for ANY bot comment after the inline comment time
+    BOT_RESPONSE_COUNT=$(echo "$PR_DATA" | jq --arg comment_time "$COMMENT_TIME" '
       [.comments[] | 
        select(.author.login == "splat-sdlc-agent[bot]") |
-       select(.body | contains("@'"$REVIEWER"'"))] |
-      sort_by(.createdAt) |
-      reverse |
-      .[0].createdAt // empty
+       select(.createdAt > $comment_time)] |
+      length
     ')
     
-    if [ -z "$LAST_RESPONSE" ] || [ "$COMMENT_TIME" \> "$LAST_RESPONSE" ]; then
-      echo "PR #${pr_num} (story #${STORY_NUM}) has ${REVIEW_COMMENTS} inline review comment(s) from @${REVIEWER}"
-      
-      # Emit event to trigger response
-      ralph tools pubsub publish dev.pr-feedback \
-        "story=${STORY_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
-      
-      return 0
+    if [ "$BOT_RESPONSE_COUNT" -gt 0 ]; then
+      echo "Already responded to inline review comment from @${REVIEWER} at ${COMMENT_TIME}"
+      return 1
     fi
+    
+    echo "PR #${pr_num} (story #${STORY_NUM}) has ${REVIEW_COMMENTS} inline review comment(s) from @${REVIEWER}"
+    
+    # Emit event to trigger response
+    ralph tools pubsub publish dev.pr-feedback \
+      "story=${STORY_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
+    
+    return 0
   fi
   
   # Check for PR-level comments (questions/discussions on the PR itself)
