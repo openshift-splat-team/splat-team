@@ -1,12 +1,12 @@
 ---
 name: Monitor Active PRs
-description: Check all active staging PRs for review comments and trigger responses
+description: Check all open and recently merged staging PRs for review comments and trigger responses
 auto_inject: true
 ---
 
 # Monitor Active PRs
 
-Scan all active staging PRs in openshift-splat-team forks for review comments and trigger appropriate responses.
+Scan all open and recently merged staging PRs in openshift-splat-team forks for review comments and trigger appropriate responses.
 
 ## Purpose
 
@@ -20,12 +20,13 @@ This skill is called by the board scanner to check PRs in parallel with issue sc
 
 ## What It Does
 
-1. **Find Active PRs** - Lists all open PRs in staging forks
+1. **Find Active PRs** - Lists all open PRs AND recently merged PRs (last 7 days) in staging forks
 2. **Check for Feedback** - Looks for:
    - Reviews with "CHANGES_REQUESTED" state
    - Inline review comments (code-level feedback)
    - PR-level comments (general discussions)
-3. **Emit Events** - Triggers dev.pr-feedback for PRs needing response
+   - Post-merge feedback (security concerns, late reviews, follow-up questions)
+3. **Emit Events** - Triggers dev.pr-feedback for PRs needing response, regardless of story status
 
 ## Implementation
 
@@ -43,11 +44,19 @@ PROJECTS=(
   "vcf-migration-operator"
 )
 
-# Check each project for open PRs
+# Check each project for open AND recently merged PRs
 for project in "${PROJECTS[@]}"; do
+  # Get open PRs
   gh pr list \
     --repo "openshift-splat-team/${project}" \
     --state open \
+    --json number,headRefName,updatedAt,reviewDecision
+  
+  # Get recently merged PRs (last 7 days) - may still have active discussion
+  gh pr list \
+    --repo "openshift-splat-team/${project}" \
+    --state merged \
+    --search "merged:>$(date -d '7 days ago' +%Y-%m-%d)" \
     --json number,headRefName,updatedAt,reviewDecision
 done
 ```
@@ -101,25 +110,26 @@ check_pr_feedback() {
     REVIEWER=$(echo "$CHANGES_REQUESTED" | jq -r '.author.login')
     REVIEW_TIME=$(echo "$CHANGES_REQUESTED" | jq -r '.submittedAt')
     
-    # Check if already responded
-    LAST_RESPONSE=$(echo "$PR_DATA" | jq -r '
+    # Check if already responded - look for ANY bot comment after the review time
+    BOT_RESPONSE_COUNT=$(echo "$PR_DATA" | jq --arg review_time "$REVIEW_TIME" '
       [.comments[] | 
        select(.author.login == "splat-sdlc-agent[bot]") |
-       select(.body | contains("Feedback Addressed") or contains("Working on"))] |
-      sort_by(.createdAt) |
-      reverse |
-      .[0].createdAt // empty
+       select(.createdAt > $review_time)] |
+      length
     ')
     
-    if [ -z "$LAST_RESPONSE" ] || [ "$REVIEW_TIME" \> "$LAST_RESPONSE" ]; then
-      echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has unaddressed feedback from @${REVIEWER}"
-
-      # Emit event to trigger response
-      ralph tools pubsub publish "$FEEDBACK_EVENT" \
-        "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
-
-      return 0
+    if [ "$BOT_RESPONSE_COUNT" -gt 0 ]; then
+      echo "Already responded to review from @${REVIEWER} at ${REVIEW_TIME}"
+      return 1
     fi
+    
+    echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has unaddressed feedback from @${REVIEWER}"
+    
+    # Emit event to trigger response
+    ralph tools pubsub publish "$FEEDBACK_EVENT" \
+      "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
+    
+    return 0
   fi
 
   # Check for inline review comments (from /pulls/:pull_number/comments)
@@ -133,26 +143,27 @@ check_pr_feedback() {
 
     REVIEWER=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.user.login')
     COMMENT_TIME=$(echo "$LATEST_REVIEW_COMMENT" | jq -r '.created_at')
-
-    # Check if already responded to this review comment
-    LAST_RESPONSE=$(echo "$PR_DATA" | jq -r '
-      [.comments[] |
+    
+    # Check if already responded - look for ANY bot comment after the inline comment time
+    BOT_RESPONSE_COUNT=$(echo "$PR_DATA" | jq --arg comment_time "$COMMENT_TIME" '
+      [.comments[] | 
        select(.author.login == "splat-sdlc-agent[bot]") |
-       select(.body | contains("@'"$REVIEWER"'"))] |
-      sort_by(.createdAt) |
-      reverse |
-      .[0].createdAt // empty
+       select(.createdAt > $comment_time)] |
+      length
     ')
-
-    if [ -z "$LAST_RESPONSE" ] || [ "$COMMENT_TIME" \> "$LAST_RESPONSE" ]; then
-      echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has ${REVIEW_COMMENTS} inline review comment(s) from @${REVIEWER}"
-
-      # Emit event to trigger response
-      ralph tools pubsub publish "$FEEDBACK_EVENT" \
-        "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
-
-      return 0
+    
+    if [ "$BOT_RESPONSE_COUNT" -gt 0 ]; then
+      echo "Already responded to inline review comment from @${REVIEWER} at ${COMMENT_TIME}"
+      return 1
     fi
+    
+    echo "PR #${pr_num} (issue #${ISSUE_NUM}) in ${project} has ${REVIEW_COMMENTS} inline review comment(s) from @${REVIEWER}"
+    
+    # Emit event to trigger response
+    ralph tools pubsub publish "$FEEDBACK_EVENT" \
+      "issue=${ISSUE_NUM}, project=${project}, pr=${pr_num}, reviewer=${REVIEWER}"
+    
+    return 0
   fi
   
   # Check for PR-level comments (human feedback on the PR conversation)
@@ -197,17 +208,28 @@ scan_all_prs() {
   
   for project in "${PROJECTS[@]}"; do
     # Get open PRs
-    PRS=$(gh pr list \
+    OPEN_PRS=$(gh pr list \
       --repo "openshift-splat-team/${project}" \
       --state open \
       --json number \
       --jq '.[].number')
     
-    if [ -z "$PRS" ]; then
+    # Get recently merged PRs (last 7 days) - may still have active discussion
+    MERGED_PRS=$(gh pr list \
+      --repo "openshift-splat-team/${project}" \
+      --state merged \
+      --search "merged:>$(date -d '7 days ago' +%Y-%m-%d)" \
+      --json number \
+      --jq '.[].number' 2>/dev/null || echo "")
+    
+    # Combine both lists
+    ALL_PRS="$OPEN_PRS $MERGED_PRS"
+    
+    if [ -z "$ALL_PRS" ]; then
       continue
     fi
     
-    for pr in $PRS; do
+    for pr in $ALL_PRS; do
       if check_pr_feedback "$project" "$pr"; then
         ((feedback_count++))
       fi
@@ -312,9 +334,12 @@ check_pr_feedback "cloud-credential-operator" 3
 ## Notes
 
 - Runs automatically during board scan (if auto_inject: true)
+- Checks **both open and recently merged** PRs (merged within last 7 days)
+- Monitors post-merge feedback - important for catching late reviews, security concerns, etc.
 - Only checks openshift-splat-team/* staging forks
 - Does not check upstream openshift/* PRs
 - Idempotent - won't trigger duplicate responses
 - Emits events that dev_implementer can handle
+- **Story status doesn't matter** - PRs are monitored regardless of whether the story is "done"
 
 This skill ensures that PR feedback is never missed and responses are timely! 🚀
