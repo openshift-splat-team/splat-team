@@ -1,0 +1,149 @@
+# Epic #14: vSphere multi-account credential management
+# Generated: 2026-05-14T20:16:28Z
+#
+# Build:
+#   podman build --build-arg GITHUB_TOKEN=$(gh auth token) \
+#     -f Containerfile.epic-14 -t epic-14-debug .
+#
+# Run IDE (default):
+#   podman run -p 8000:8000 epic-14-debug
+#   Open http://localhost:8000
+#
+# Run shell only:
+#   podman run -it epic-14-debug bash
+
+FROM registry.access.redhat.com/ubi9/ubi-minimal
+
+ARG GITHUB_TOKEN
+
+LABEL io.botminter.epic="14"
+LABEL io.botminter.epic-title="vSphere multi-account credential management"
+LABEL io.botminter.generated="2026-05-14T20:16:28Z"
+LABEL io.botminter.team="openshift-splat-team/splat-team"
+
+RUN microdnf install -y git tar gzip findutils make && microdnf clean all
+
+RUN git config --global user.email "debug@botminter" && \
+    git config --global user.name "epic-debug"
+
+# Go 1.25.0 (highest version required across project repos)
+RUN curl -fsSL https://go.dev/dl/go1.25.0.linux-amd64.tar.gz | tar -C /usr/local -xz
+
+ENV PATH="/usr/local/go/bin:${GOPATH}/bin:${PATH}"
+ENV GOPATH="/root/go"
+
+# VSCodium web server (1.116.02821)
+RUN mkdir -p /opt/vscodium && \
+    curl -fsSL https://github.com/VSCodium/vscodium/releases/download/1.116.02821/vscodium-reh-web-linux-x64-1.116.02821.tar.gz \
+    | tar -C /opt/vscodium -xz && \
+    ln -s /opt/vscodium/bin/codium-server /usr/local/bin/codium-server
+
+# Pre-install Go extension from Open VSX
+RUN codium-server --install-extension golang.go \
+    --extensions-dir /opt/vscodium-extensions
+
+ENV EXTENSIONS_DIR="/opt/vscodium-extensions"
+
+EXPOSE 8000
+
+WORKDIR /src
+
+# Team repo (default branch)
+RUN git clone --single-branch \
+    https://x-access-token:${GITHUB_TOKEN}@github.com/openshift-splat-team/splat-team.git team
+
+# --- cloud-credential-operator ---
+# Multiple PRs — merging branches:
+#   Story #19: CCO Detects and Provisions Component Credentials (PR #4, branch: story-19-cco-component-credentials)
+#   Story #25: Multi-vCenter Support and Validation (PR #3, branch: story-25-multi-vcenter-support)
+RUN git clone https://x-access-token:${GITHUB_TOKEN}@github.com/openshift-splat-team/cloud-credential-operator.git \
+    projects/cloud-credential-operator && \
+    cd projects/cloud-credential-operator && \
+    git fetch origin story-19-cco-component-credentials && \
+    git checkout -b epic-debug FETCH_HEAD && \
+    git fetch origin story-25-multi-vcenter-support && \
+    (git merge FETCH_HEAD --no-edit || echo 'WARN: merge conflict on story-25-multi-vcenter-support (story #25, PR #3)')
+
+# --- cluster-cloud-controller-manager-operator ---
+# Story #22: Cloud Controller Manager Component Credential Integration (PR #1)
+RUN git clone https://x-access-token:${GITHUB_TOKEN}@github.com/openshift-splat-team/cluster-cloud-controller-manager-operator.git \
+    projects/cluster-cloud-controller-manager-operator && \
+    cd projects/cluster-cloud-controller-manager-operator && \
+    git fetch origin story-22-cloud-controller && \
+    git checkout -b epic-debug FETCH_HEAD
+
+# --- cluster-storage-operator ---
+# Story #21: Storage (CSI Driver) Component Credential Integration (PR #1)
+RUN git clone https://x-access-token:${GITHUB_TOKEN}@github.com/openshift-splat-team/cluster-storage-operator.git \
+    projects/cluster-storage-operator && \
+    cd projects/cluster-storage-operator && \
+    git fetch origin story-21-storage-credentials && \
+    git checkout -b epic-debug FETCH_HEAD
+
+# --- installer ---
+# Story #18: Installer Provisions Component Secrets (PR #11)
+RUN git clone https://x-access-token:${GITHUB_TOKEN}@github.com/openshift-splat-team/installer.git \
+    projects/installer && \
+    cd projects/installer && \
+    git fetch origin story-18-component-secrets && \
+    git checkout -b epic-debug FETCH_HEAD
+
+# --- machine-api-operator ---
+# Story #20: Machine API Operator Component Credential Integration (PR #1)
+RUN git clone https://x-access-token:${GITHUB_TOKEN}@github.com/openshift-splat-team/machine-api-operator.git \
+    projects/machine-api-operator && \
+    cd projects/machine-api-operator && \
+    git fetch origin story-20-component-credentials && \
+    git checkout -b epic-debug FETCH_HEAD
+
+# Epic manifest for quick orientation
+RUN cat > /src/EPIC-MANIFEST.md << 'EPIC_MANIFEST'
+# Epic #14: vSphere multi-account credential management
+
+Generated: 2026-05-14T20:16:28Z
+Team: openshift-splat-team/splat-team
+
+## Included Source
+
+| Project | Branch | Story | PR |
+|---------|--------|-------|----|
+| cloud-credential-operator | `story-19-cco-component-credentials` | #19 | cloud-credential-operator#4 |
+| cloud-credential-operator | `story-25-multi-vcenter-support` | #25 | cloud-credential-operator#3 |
+| cluster-cloud-controller-manager-operator | `story-22-cloud-controller` | #22 | cluster-cloud-controller-manager-operator#1 |
+| cluster-storage-operator | `story-21-storage-credentials` | #21 | cluster-storage-operator#1 |
+| installer | `story-18-component-secrets` | #18 | installer#11 |
+| machine-api-operator | `story-20-component-credentials` | #20 | machine-api-operator#1 |
+
+## Container Layout
+
+```
+/src/
+  team/                    # Team repo (default branch)
+  projects/
+    cloud-credential-operator/ # story-19-cco-component-credentials, story-25-multi-vcenter-support
+    cluster-cloud-controller-manager-operator/ # story-22-cloud-controller
+    cluster-storage-operator/ # story-21-storage-credentials
+    installer/                # story-18-component-secrets
+    machine-api-operator/     # story-20-component-credentials
+```
+EPIC_MANIFEST
+
+# Entrypoint: IDE by default, shell on override
+RUN cat > /usr/local/bin/entrypoint.sh << 'ENTRY'
+#!/bin/sh
+if [ "$1" = "bash" ] || [ "$1" = "sh" ]; then
+    exec "$@"
+fi
+exec codium-server \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --without-connection-token \
+    --accept-server-license-terms \
+    --extensions-dir "$EXTENSIONS_DIR" \
+    --server-data-dir /root/.vscodium-server \
+    "$@"
+ENTRY
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD []
