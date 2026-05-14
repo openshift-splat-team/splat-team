@@ -1,5 +1,5 @@
 # Epic #14: vSphere multi-account credential management
-# Generated: 2026-05-14T20:16:28Z
+# Generated: 2026-05-14T21:04:29Z
 #
 # Build:
 #   podman build --build-arg GITHUB_TOKEN=$(gh auth token) \
@@ -18,7 +18,7 @@ ARG GITHUB_TOKEN
 
 LABEL io.botminter.epic="14"
 LABEL io.botminter.epic-title="vSphere multi-account credential management"
-LABEL io.botminter.generated="2026-05-14T20:16:28Z"
+LABEL io.botminter.generated="2026-05-14T21:04:29Z"
 LABEL io.botminter.team="openshift-splat-team/splat-team"
 
 RUN microdnf install -y git tar gzip findutils make && microdnf clean all
@@ -100,7 +100,7 @@ RUN git clone https://x-access-token:${GITHUB_TOKEN}@github.com/openshift-splat-
 RUN cat > /src/EPIC-MANIFEST.md << 'EPIC_MANIFEST'
 # Epic #14: vSphere multi-account credential management
 
-Generated: 2026-05-14T20:16:28Z
+Generated: 2026-05-14T21:04:29Z
 Team: openshift-splat-team/splat-team
 
 ## Included Source

@@ -103,6 +103,8 @@ projects:
   fork_url: https://github.com/openshift-splat-team/release
 - name: multiarch-tuning-operator
   fork_url: https://github.com/openshift-splat-team/multiarch-tuning-operator
+- name: api
+  fork_url: https://github.com/openshift-splat-team/api
 - name: cluster-capi-operator
   fork_url: https://github.com/openshift/cluster-capi-operator
 views:
